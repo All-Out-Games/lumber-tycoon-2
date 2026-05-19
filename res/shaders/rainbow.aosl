@@ -1,0 +1,63 @@
+!!inputs {
+	texture albedo ALBEDO
+	// Minimal controls
+	float rainbowScale // band frequency across UV
+	float hueSpeed // hue scroll speed over time
+	float hueSaturation // HSV S
+	float hueValue // HSV V
+	float tintStrength // 0..1 mix with base
+    // Preserve black outlines (do not tint near-black)
+    float outlineLow // start of non-outline threshold (maxRGB)
+    float outlineHigh // end of non-outline threshold
+}
+
+!!pipeline {
+	Pixel_Format: RGBA8_SRGB
+	Blend_Enabled: true
+	Depth_Enabled: true
+	Blend_Src: ONE
+	Blend_Dst: ONE_MINUS_SRC_ALPHA
+	Blend_Op: ADD
+	Alpha_Blend_Src: ONE
+	Alpha_Blend_Dst: ONE
+	Alpha_Blend_Op: ADD
+	Blend_Color: (1, 1, 1, 1)
+}
+
+!!vs
+struct vs_out {
+	float4 color: COLOR0;
+	float2 uv: UV;
+	float4 pos: SV_Position;
+};
+vs_out vs_main(vs_in inp) {
+	vs_out outp;
+	outp.pos = mul(mvp, float4(inp.pos.xy, 0, 1.0f));
+	outp.uv = inp.uv;
+	outp.color = inp.color;
+	return outp;
+}
+
+!!ps
+float3 hsv2rgb(float3 c)
+{
+	float4 K = float4(1.0f, 2.0f/3.0f, 1.0f/3.0f, 3.0f);
+	float3 p = abs(frac(c.xxx + K.xyz) * 6.0f - K.www);
+	return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
+}
+
+float4 ps_main(float4 vtxColor: COLOR0, float2 uv: UV): SV_Target0 {
+	float4 base = vtxColor * albedo.Sample(albedo_smp, uv);
+	float t = resolution_time.z;
+	float h = frac((uv.x*0.9f + uv.y*0.5f) * max(0.01f, rainbowScale) + t * hueSpeed);
+	float3 rainbow = hsv2rgb(float3(h, saturate(hueSaturation), saturate(hueValue)));
+    // Non-outline mask based on brightness; outlines have very low maxRGB
+    float maxRGB = max(base.r, max(base.g, base.b));
+    float nonOutline = smoothstep(outlineLow, outlineHigh, maxRGB);
+    float w = saturate(tintStrength) * nonOutline;
+    float3 rgb = lerp(base.rgb, rainbow, w);
+	rgb = saturate(rgb) * base.a;
+	return float4(rgb, base.a);
+}
+
+

@@ -1,0 +1,47 @@
+14
+3676492005377
+3484601048
+{
+  "name": "Tree_Level_1_Sample_Normal",
+  "local_enabled": true,
+  "local_position": {
+    "X": 12.7126293182373047,
+    "Y": 24.7148036956787109
+  },
+  "local_rotation": 0,
+  "local_scale": {
+    "X": 2.7000000476837158,
+    "Y": 2.8499999046325684
+  },
+  "previous_sibling": 3476624758,
+  "next_sibling": 3476024231,
+  "parent": 3474768949
+},
+{
+  "cid": 2,
+  "aoid": 3487764905,
+  "component_type": "Internal_Component",
+  "internal_component_type": "Lumber_Tree",
+  "data": {
+    "tree_level": 2
+  }
+},
+{
+  "cid": 97,
+  "aoid": 2010989105,
+  "component_type": "Internal_Component",
+  "internal_component_type": "Sprite_Renderer",
+  "data": {
+    "texture": "$AO/ui/kit/Game UI/Item Backs/inventory_squares_3/inv_square_missing_white.png",
+    "tint": {
+      "Y": 0.8199999928474426,
+      "Z": 0.1199999973177910,
+      "W": 0.7599999904632568
+    },
+    "layer": 12,
+    "scale": {
+      "X": 1.3500000238418579,
+      "Y": 1.3500000238418579
+    }
+  }
+}

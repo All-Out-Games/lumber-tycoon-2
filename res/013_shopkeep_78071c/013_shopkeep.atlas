@@ -1,0 +1,46 @@
+78071c0993289b3f.png
+	size: 884, 188
+	filter: Linear, Linear
+	scale: 0.5
+images/Shopkeeper/Schleem shopkeeper wo hat
+	bounds: 302, 63, 93, 116
+images/Shopkeeper/Shop
+	bounds: 6, 6, 290, 173
+	offsets: 0, 2, 301, 175
+images/Shopkeeper/eyebrows
+	bounds: 454, 96, 83, 27
+	rotate: 90
+images/Shopkeeper/finger_L
+	bounds: 834, 160, 19, 18
+	offsets: 0, 1, 19, 19
+	rotate: 90
+images/Shopkeeper/hand_L_palm
+	bounds: 708, 142, 37, 36
+	rotate: 90
+images/Shopkeeper/hat
+	bounds: 401, 125, 54, 47
+	rotate: 90
+images/Shopkeeper/left eye
+	bounds: 665, 142, 37, 37
+images/Shopkeeper/lid_blink
+	bounds: 619, 137, 40, 42
+	offsets: 1, 0, 42, 42
+images/Shopkeeper/lid_happy
+	bounds: 750, 140, 39, 23
+	offsets: 1, 0, 41, 23
+	rotate: 90
+images/Shopkeeper/nose
+	bounds: 779, 149, 23, 30
+images/Shopkeeper/pupil
+	bounds: 858, 162, 17, 17
+images/Shopkeeper/right eye
+	bounds: 572, 137, 42, 41
+	rotate: 90
+images/Shopkeeper/shopkeeper hands
+	bounds: 487, 34, 145, 26
+	rotate: 90
+images/Shopkeeper/thumb_L
+	bounds: 808, 158, 20, 21
+images/Shopkeeper/wow sign
+	bounds: 518, 130, 49, 48
+	rotate: 90

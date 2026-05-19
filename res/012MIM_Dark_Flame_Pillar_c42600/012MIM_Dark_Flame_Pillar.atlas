@@ -1,0 +1,83 @@
+c42600b3104c27e0.png
+	size: 4084, 288
+	filter: Linear, Linear
+	scale: 0.5
+012MIM_dark_embers/dark_ember_1
+	bounds: 3835, 196, 86, 86
+	offsets: 8, 8, 102, 102
+012MIM_dark_embers/dark_ember_2
+	bounds: 3927, 213, 69, 68
+	offsets: 6, 7, 82, 81
+	rotate: 90
+012MIM_dark_smoke/dark_smoke_particle_A
+	bounds: 2224, 96, 162, 186
+	offsets: 1, 2, 165, 189
+012MIM_dark_smoke/dark_smoke_particle_B
+	bounds: 3606, 145, 103, 137
+	offsets: 1, 2, 106, 139
+012MIM_dark_smoke/dark_smoke_particle_C
+	bounds: 3484, 157, 116, 125
+	offsets: 1, 2, 118, 128
+012MIM_dark_smoke/dark_smoke_particle_D
+	bounds: 2392, 115, 159, 167
+	offsets: 1, 1, 161, 169
+012MIM_dark_smoke/dark_smoke_particle_E
+	bounds: 1210, 57, 225, 194
+	offsets: 0, 1, 226, 196
+	rotate: 90
+012MIM_darkfire_column/column_of_fire_4
+	bounds: 2694, 128, 154, 152
+	offsets: 6, 6, 168, 165
+	rotate: 90
+012MIM_darkfire_column/darkfire_column_1
+	bounds: 3715, 167, 115, 114
+	offsets: 7, 10, 132, 132
+	rotate: 90
+012MIM_darkfire_column/darkfire_column_2
+	bounds: 3225, 156, 126, 125
+	offsets: 9, 11, 145, 144
+	rotate: 90
+012MIM_darkfire_column/darkfire_column_3
+	bounds: 3356, 158, 122, 124
+	offsets: 5, 5, 135, 135
+Dust/dustL0000
+	bounds: 408, 21, 406, 261
+Dust/dustL0001
+	bounds: 6, 6, 396, 276
+Dust/dustL0002
+	bounds: 820, 15, 384, 267
+Dust/dustR0000
+	bounds: 1410, 72, 210, 205
+	rotate: 90
+Dust/dustR0001
+	bounds: 2028, 72, 190, 210
+Dust/dustR0002
+	bounds: 1829, 74, 193, 208
+dark_aura/dark_aura_inner1
+	bounds: 3090, 149, 129, 133
+dark_aura/dark_aura_outer1
+	bounds: 1621, 79, 203, 202
+	rotate: 90
+ember_particles/Ember 4
+	bounds: 3927, 179, 64, 28
+	offsets: 0, 0, 65, 28
+ember_particles/Medium Particles 1
+	bounds: 4001, 212, 70, 39
+	rotate: 90
+ember_particles/Medium Particles 2
+	bounds: 4046, 199, 18, 15
+ember_particles/Small Particles 2
+	bounds: 4046, 243, 39, 32
+	offsets: 0, 0, 39, 35
+	rotate: 90
+ember_particles/Small Particles 3
+	bounds: 4046, 220, 24, 17
+fire_pillar/start_fire_pillar0000
+	bounds: 2982, 98, 184, 102
+	rotate: 90
+fire_pillar/start_fire_pillar0001
+	bounds: 2852, 97, 185, 124
+	rotate: 90
+fire_pillar/start_fire_pillar0002
+	bounds: 2557, 97, 185, 131
+	rotate: 90

@@ -1,0 +1,295 @@
+{
+"skeleton": { "hash": "U8Vn7YYzZTQ", "spine": "4.0.49", "x": -161.87, "y": -105.1, "width": 341, "height": 589.73 },
+"bones": [
+	{ "name": "root" },
+	{ "name": "base", "parent": "root", "y": -85 },
+	{ "name": "ref", "parent": "root", "x": -303.28, "y": 163.91 },
+	{ "name": "trunk", "parent": "base", "length": 157.99, "rotation": 89.16, "x": 1.31, "y": 36.07 },
+	{ "name": "top", "parent": "trunk", "x": 262.52, "y": 1.54 },
+	{ "name": "icon", "parent": "root", "x": -108.41, "y": -5.04 }
+],
+"slots": [
+	{ "name": "trunk", "bone": "base", "attachment": "chop tree/tree_intact" },
+	{ "name": "top", "bone": "top", "attachment": "chop tree/tree_leaves" },
+	{ "name": "ref", "bone": "ref", "color": "85b1ff70" },
+	{ "name": "icon", "bone": "icon" }
+],
+"skins": [
+	{
+		"name": "default",
+		"attachments": {
+			"icon": {
+				"chop tree/wood_icon": { "x": 0.5, "width": 93, "height": 80 }
+			},
+			"top": {
+				"chop tree/tree_leaves": { "x": 51.12, "y": -4.25, "rotation": -89.16, "width": 341, "height": 440 },
+				"chop tree/_tree_cut_top": { "x": 18.89, "y": -4.78, "rotation": -89.16, "width": 341, "height": 503 }
+			},
+			"trunk": {
+				"chop tree/tree_intact": { "x": 0.5, "y": 117.9, "width": 117, "height": 276 },
+				"chop tree/_tree_cut_bottom": { "x": 0.5, "y": 27, "width": 117, "height": 94 }
+			}
+		}
+	}
+],
+"animations": {
+	"chop": {
+		"slots": {
+			"top": {
+				"attachment": [
+					{ "name": "chop tree/tree_leaves" }
+				]
+			},
+			"trunk": {
+				"attachment": [
+					{ "name": "chop tree/tree_intact" }
+				]
+			}
+		},
+		"bones": {
+			"base": {
+				"translate": [
+					{}
+				],
+				"shear": [
+					{
+						"curve": [ 0.028, 0, 0.056, 0, 0.026, -7.6, 0.056, -6.08 ]
+					},
+					{
+						"time": 0.0833,
+						"y": -6.08,
+						"curve": [ 0.139, 0, 0.194, 0, 0.139, -6.08, 0.194, 1.04 ]
+					},
+					{
+						"time": 0.25,
+						"y": 1.04,
+						"curve": [ 0.278, 0, 0.306, 0, 0.278, 1.04, 0.306, 0 ]
+					},
+					{ "time": 0.3333 }
+				]
+			},
+			"top": {
+				"rotate": [
+					{
+						"curve": [ 0.028, 2.67, 0.056, 4 ]
+					},
+					{
+						"time": 0.0833,
+						"value": 4,
+						"curve": [ 0.103, 4, 0.214, -1.25 ]
+					},
+					{
+						"time": 0.25,
+						"value": -1.25,
+						"curve": [ 0.278, -1.25, 0.306, 1.25 ]
+					},
+					{
+						"time": 0.3333,
+						"value": 1.25,
+						"curve": [ 0.361, 1.25, 0.389, 0.42 ]
+					},
+					{ "time": 0.4167 }
+				],
+				"translate": [
+					{
+						"curve": [ 0.028, -0.07, 0.056, -0.11, 0.028, 4.76, 0.056, 7.14 ]
+					},
+					{
+						"time": 0.0833,
+						"x": -0.11,
+						"y": 7.14,
+						"curve": [ 0.167, -0.11, 0.167, -0.09, 0.167, 7.14, 0.167, 6.07 ]
+					},
+					{
+						"time": 0.25,
+						"x": -0.06,
+						"y": 4.29,
+						"curve": [ 0.278, -0.05, 0.306, 0.04, 0.278, 3.69, 0.306, -2.97 ]
+					},
+					{
+						"time": 0.3333,
+						"x": 0.06,
+						"y": -4.4,
+						"curve": [ 0.361, 0.09, 0.389, 0.02, 0.361, -5.82, 0.389, -1.47 ]
+					},
+					{ "time": 0.4167 }
+				],
+				"scale": [
+					{
+						"curve": [ 0.028, 1.022, 0.056, 1.033, 0.028, 0.978, 0.056, 0.967 ]
+					},
+					{
+						"time": 0.0833,
+						"x": 1.033,
+						"y": 0.967,
+						"curve": [ 0.139, 1.033, 0.194, 0.983, 0.139, 0.967, 0.194, 1.017 ]
+					},
+					{
+						"time": 0.25,
+						"x": 0.983,
+						"y": 1.017,
+						"curve": [ 0.278, 0.983, 0.306, 1, 0.278, 1.017, 0.306, 1 ]
+					},
+					{ "time": 0.3333, "curve": "stepped" },
+					{ "time": 0.4167 }
+				]
+			}
+		}
+	},
+	"fall": {
+		"slots": {
+			"icon": {
+				"rgba": [
+					{
+						"time": 1.0833,
+						"color": "ffffffff",
+						"curve": [ 1.139, 1, 1.278, 1, 1.139, 1, 1.278, 1, 1.139, 1, 1.278, 1, 1.139, 1, 1.278, 0 ]
+					},
+					{ "time": 1.3333, "color": "ffffff00" }
+				],
+				"attachment": [
+					{ "time": 0.5833, "name": "chop tree/wood_icon" },
+					{ "time": 1.3333, "name": null }
+				]
+			},
+			"top": {
+				"rgba": [
+					{
+						"time": 0.5833,
+						"color": "ffffffff",
+						"curve": [ 0.667, 1, 0.75, 1, 0.667, 1, 0.75, 1, 0.667, 1, 0.75, 1, 0.667, 1, 0.75, 0 ]
+					},
+					{ "time": 0.8333, "color": "ffffff00" }
+				],
+				"attachment": [
+					{ "name": "chop tree/_tree_cut_top" },
+					{ "time": 0.8333, "name": null }
+				]
+			},
+			"trunk": {
+				"attachment": [
+					{ "name": "chop tree/_tree_cut_bottom" }
+				]
+			}
+		},
+		"bones": {
+			"base": {
+				"translate": [
+					{}
+				]
+			},
+			"trunk": {
+				"rotate": [
+					{
+						"curve": [ 0.071, 2.1, 0.361, -40.97 ]
+					},
+					{ "time": 0.4167, "value": -92.35 }
+				],
+				"translate": [
+					{
+						"curve": [ 0.083, 0, 0.238, -10.81, 0.083, 0, 0.218, 26.51 ]
+					},
+					{
+						"time": 0.25,
+						"x": -8.95,
+						"y": 26.85,
+						"curve": [ 0.278, -4.68, 0.367, 24.98, 0.277, 27.12, 0.361, 32.64 ]
+					},
+					{
+						"time": 0.4167,
+						"x": 62.11,
+						"y": 23.38,
+						"curve": [ 0.473, 62.94, 0.528, 62.11, 0.471, 23.72, 0.528, 31.74 ]
+					},
+					{ "time": 0.5833, "x": 62.11, "y": 31.74 }
+				],
+				"scale": [
+					{
+						"time": 0.3333,
+						"curve": [ 0.361, 1.017, 0.389, 1.051, 0.361, 0.955, 0.389, 0.866 ]
+					},
+					{
+						"time": 0.4167,
+						"x": 1.051,
+						"y": 0.866,
+						"curve": [ 0.472, 1.051, 0.528, 1, 0.472, 0.866, 0.528, 1 ]
+					},
+					{ "time": 0.5833 }
+				]
+			},
+			"icon": {
+				"translate": [
+					{
+						"time": 0.5833,
+						"x": 111.52,
+						"y": 32.73,
+						"curve": [ 0.639, 111.52, 0.694, 111.52, 0.639, 65.65, 0.694, 82.1 ]
+					},
+					{
+						"time": 0.75,
+						"x": 111.52,
+						"y": 82.1,
+						"curve": [ 0.778, 111.52, 0.889, 111.52, 0.778, 82.1, 0.889, 71.13 ]
+					},
+					{
+						"time": 0.9167,
+						"x": 111.52,
+						"y": 71.13,
+						"curve": [ 1.028, 111.52, 1.222, 111.52, 1.028, 71.13, 1.236, 162.77 ]
+					},
+					{ "time": 1.3333, "x": 111.52, "y": 213.77 }
+				],
+				"scale": [
+					{
+						"time": 0.5833,
+						"curve": [ 0.639, 1.173, 0.694, 1.259, 0.639, 1.173, 0.694, 1.259 ]
+					},
+					{ "time": 0.75, "x": 1.259, "y": 1.259 }
+				]
+			}
+		}
+	},
+	"fallen_idle": {
+		"slots": {
+			"top": {
+				"attachment": [
+					{ "name": null }
+				]
+			},
+			"trunk": {
+				"attachment": [
+					{ "name": "chop tree/_tree_cut_bottom" }
+				]
+			}
+		},
+		"bones": {
+			"base": {
+				"translate": [
+					{}
+				]
+			}
+		}
+	},
+	"idle": {
+		"slots": {
+			"top": {
+				"attachment": [
+					{ "name": "chop tree/tree_leaves" }
+				]
+			},
+			"trunk": {
+				"attachment": [
+					{ "name": "chop tree/tree_intact" }
+				]
+			}
+		},
+		"bones": {
+			"base": {
+				"translate": [
+					{}
+				]
+			}
+		}
+	}
+}
+}

@@ -1,0 +1,609 @@
+Entity :: class {
+    set_local_enabled          :: method(enabled: bool)                                                                                                                 #foreign "entity_set_local_enabled";
+    get_local_enabled          :: method() -> bool                                                                                                                      #foreign "entity_get_local_enabled";
+    get_world_enabled          :: method() -> bool                                                                                                                      #foreign "entity_get_world_enabled";
+    queue_for_destruction      :: method(after_seconds: float)                                                                                                          #foreign "entity_queue_for_destruction";
+    calculate_visual_position  :: method() -> v2                                                                                                                        #foreign "entity_calculate_visual_position";
+    calculate_predictive_error :: method() -> v2                                                                                                                        #foreign "entity_calculate_predictive_error";
+    calculate_interpolation_offset :: method() -> v2                                                                                                                    #foreign "entity_calculate_interpolation_offset";
+    mark_teleported            :: method()                                                                                                                              #foreign "entity_mark_teleported";
+    get_name                   :: method() -> string                                                                                                                    #foreign "entity_get_name";
+    set_name                   :: method(new_name: string)                                                                                                              #foreign "entity_set_name";
+    compare_name               :: method(name: string) -> bool                                                                                                           #foreign "entity_compare_name";
+    set_parent                 :: method(new_parent: Entity, keep_world_position: bool)                                                                                 #foreign "entity_set_parent";
+    set_local_position         :: method(p: v2)                                                                                                                         #foreign "entity_set_local_position";
+    lerp_local_position        :: method(target: v2, t: float)                                                                                                          #foreign "entity_lerp_local_position";
+    add_local_position         :: method(delta: v2)                                                                                                                     #foreign "entity_add_local_position";
+    set_local_scale            :: method(scale: v2)                                                                                                                     #foreign "entity_set_local_scale";
+    lerp_local_scale           :: method(target: v2, t: float)                                                                                                          #foreign "entity_lerp_local_scale";
+    set_local_rotation         :: method(degrees: float)                                                                                                                #foreign "entity_set_local_rotation";
+    lerp_local_rotation        :: method(target: float, t: float)                                                                                                       #foreign "entity_lerp_local_rotation";
+    add_local_rotation         :: method(delta: float)                                                                                                                  #foreign "entity_add_local_rotation";
+    destroy                    :: method()                                                                                                                              #foreign "entity_destroy";
+    add_component_raw          :: method(t: typeid, userdata: Object = {}, on_before_start: proc(component: Component, userdata: Object) = {}) -> Component             #foreign "entity_add_component";
+    get_component_raw          :: method(t: typeid) -> Component                                                                                                        #foreign "entity_get_component";
+    add_component :: proc(entity: Entity, $T: typeid, userdata: Object = {}, on_before_start: proc(component: Component, userdata: Object) = {}) -> T {
+        return add_component_raw(entity, T, userdata, on_before_start).(T);
+    }
+    get_component :: proc(entity: Entity, $T: typeid) -> T {
+        return get_component_raw(entity, T).(T);
+    }
+    get_first_component :: method() -> Component #foreign "entity_get_first_component";
+    get_last_component  :: method() -> Component #foreign "entity_get_last_component";
+    get_next_sibling    :: method() -> Entity    #foreign "entity_get_next_sibling";
+    get_prev_sibling    :: method() -> Entity    #foreign "entity_get_prev_sibling";
+    get_first_child     :: method() -> Entity    #foreign "entity_get_first_child";
+    get_last_child      :: method() -> Entity    #foreign "entity_get_last_child";
+    get_parent          :: method() -> Entity    #foreign "entity_get_parent";
+    id:                   u64                 #read_only #offset 0;
+    local_position:       v2                  #read_only #offset 24;
+    world_position:       v2                  #read_only #offset 32;
+    local_rotation:       float               #read_only #offset 52;
+    world_rotation:       float               #read_only #offset 48;
+    local_scale:          v2                  #read_only #offset 64;
+    world_scale:          v2                  #read_only #offset 56;
+    self:                 Entity              #read_only #offset 320;
+    model_matrix:         Matrix4             #read_only #offset 80;
+    inverse_model_matrix: Matrix4             #read_only #offset 144;
+    Effect_Data :: class {
+        active_effect: Effect_Base #read_only;
+        first_effect:  Effect_Base #read_only;
+        last_effect:   Effect_Base #read_only;
+    } #gc_root
+    effect_data: Effect_Data #read_only #offset 328;
+    get_active_effect :: method() -> Effect_Base {
+        if effect_data == null  return null;
+        return effect_data.active_effect;
+    }
+    get_first_effect :: method() -> Effect_Base {
+        if effect_data == null  return null;
+        return effect_data.first_effect;
+    }
+    get_last_effect :: method() -> Effect_Base {
+        if effect_data == null  return null;
+        return effect_data.last_effect;
+    }
+} #gc_root #foreign_struct "Entity" #size 344
+
+Entity_Iterator :: struct {
+    next :: method() -> bool #foreign "entity_iterator_next";
+    current: Entity #read_only #offset 8;
+} #foreign_struct "New_Entity_Iterator" #size 32
+
+Component :: class {
+    awaken :: method() #foreign "component_awaken";
+    get_prev_component_on_entity :: method() -> Component #foreign "component_get_prev_component_on_entity";
+    get_next_component_on_entity :: method() -> Component #foreign "component_get_next_component_on_entity";
+    get_enabled :: method() -> bool #foreign "component_get_enabled";
+    set_enabled :: method(new_value: bool) #foreign "component_set_enabled";
+    #interface ao_start                   :: proc(using this: Component);
+    #interface ao_update                  :: proc(using this: Component, dt: float);
+    #interface ao_late_update             :: proc(using this: Component, dt: float);
+    #interface ao_end                     :: proc(using this: Component);
+    #interface ao_can_use_ability         :: proc(using this: Component, ability: Ability_Base) -> bool;
+    #interface ao_can_use_interactable    :: proc(using this: Component, interactable: Interactable) -> bool;
+    #interface ao_on_interactable_used    :: proc(using this: Component, interactable: Interactable);
+    #interface ao_on_holding_interactable :: proc(using this: Component, interactable: Interactable);
+    #interface ao_on_state_sync           :: proc(using this: Component);
+    component_id:             u64       #read_only #offset 8;
+    entity:                   Entity    #read_only #offset 32;
+    self:                     Component #read_only #offset 24;
+} #gc_root #foreign_struct "Component_Base" #size 64
+
+Component_Iterator :: struct($T: typeid) {
+    component_iterator_next_raw :: method() -> bool #foreign "component_iterator_next";
+    current: T #read_only #offset 16;
+    next :: method() -> bool {
+        return (&this).(*Component_Iterator(Component)).*.component_iterator_next_raw();
+    }
+} #foreign_struct "Hierarchical_Component_Iterator<Component_Base>" #size 40
+
+Sprite_Renderer :: class : Component {
+    set_texture  :: method(texture: Texture_Asset) #foreign "sprite_renderer_set_texture";
+    get_texture  :: method() -> Texture_Asset #foreign "sprite_renderer_get_texture";
+    set_material :: method(material: Material, transfer_ownership: bool) #foreign "sprite_renderer_set_material";
+    color: v4           #offset 72;
+    depth_offset: float #offset 88;
+    layer: s32          #offset 92;
+    scale: v2           #offset 104;
+    flip_x: bool           #offset 97;
+    flip_y: bool           #offset 98;
+    mask_in_shadow: bool   #offset 96;
+} #foreign_struct "Sprite_Renderer" #size 184
+
+Circle_Collider :: class : Component {
+} #foreign_struct "Circle_Collider" #size 232
+
+Box_Collider :: class : Component {
+} #foreign_struct "Box_Collider" #size 352
+
+Polygon_Collider :: class : Component {
+} #foreign_struct "Polygon_Collider" #size 264
+
+Edge_Collider :: class : Component {
+} #foreign_struct "Edge_Collider" #size 272
+
+Rigidbody :: class : Component {
+} #foreign_struct "Rigidbody" #size 112
+
+Navmesh :: class : Component {
+    try_find_closest_point_on_navmesh :: method(to_point: v2, result: ref v2, triangle_hint: ref s64) -> bool #foreign "navmesh_try_find_closest_point_on_navmesh";
+    rebuild_immediately :: method() -> bool #foreign "navmesh_rebuild_immediately";
+    mark_for_rebuild :: method() #foreign "navmesh_mark_for_rebuild";
+} #foreign_struct "Navmesh" #size 1520
+
+Navmesh_Loop :: class : Component {
+} #foreign_struct "Navmesh_Loop" #size 112
+
+Tilemap_Component :: class : Component {
+} #foreign_struct "Tilemap_Component" #size 200
+
+Terrain_Component :: class : Component {
+} #foreign_struct "Terrain_Component" #size 320
+
+Interactable :: class : Component {
+    get_text      :: method() -> string   #foreign "interactable_get_text";
+    set_text      :: method(text: string) #foreign "interactable_set_text";
+    get_hold_text :: method() -> string   #foreign "interactable_get_hold_text";
+    set_hold_text :: method(text: string) #foreign "interactable_set_hold_text";
+    set_listener :: method(new_listener: Component) #unsafe {
+        listener = new_listener;
+        true_type := type_info_table[new_listener.#type.(int)];
+        assert(true_type.kind == .CLASS, "% wasn't a class", {new_listener.#type});
+        struct_type := true_type.(Type_Info_Class).reference_to.(Type_Info_Struct);
+        can_use_proc = try_get_constant_procedure(struct_type, "can_use", proc(t: Component, player: Player) -> bool);
+        on_interact_proc = try_get_constant_procedure(struct_type, "on_interact", proc(t: Component, player: Player));
+        on_holding_proc = try_get_constant_procedure(struct_type, "on_holding", proc(t: Component, player: Player));
+    }
+    offset:             v2        #offset 96;
+    prompt_offset:      v2        #offset 104;
+    radius:             float     #offset 112;
+    required_hold_time: float     #offset 116;
+    priority:           s64       #offset 120;
+    listener: Component                                      #offset 264 #read_only;
+    can_use_proc: proc(t: Component, player: Player) -> bool #offset 272 #read_only;
+    on_interact_proc: proc(t: Component, player: Player)     #offset 280 #read_only;
+    on_holding_proc: proc(t: Component, player: Player)      #offset 288 #read_only;
+    #interface on_interact                :: proc(t: Interactable, player: Player);
+    #interface on_holding                 :: proc(t: Interactable, player: Player);
+} #foreign_struct "Interactable" #size 304
+
+Spine_Animator :: class : Component {
+    depth_offset: float #offset 64;
+    layer: s32 #offset 72;
+    mask_in_shadow: bool #offset 69;
+    instance: Spine_Instance #read_only #offset 272;
+    using _instance_fields: Spine_Instance_Fields #read_only #offset 272;
+    set_color_replace_color :: method(color: Color_Replace_Color) #foreign "spine_animator_set_color_replace_color";
+    set_material            :: method(material: Material, transfer_ownership: bool) #foreign "spine_animator_set_material";
+    set_state_machine       :: method(new_state_machine: State_Machine, transfer_ownership: bool) #foreign "spine_animator_set_state_machine";
+    get_bone_local_position :: method(bone_name: string) -> v2 #foreign "spine_animator_get_bone_position";
+    set_bone_local_position :: method(bone_name: string, position: v2) #foreign "spine_animator_set_bone_position";
+    set_skeleton            :: method(asset: Spine_Asset) #foreign "spine_animator_set_skeleton";
+    get_skeleton            :: method() -> Spine_Asset #foreign "spine_animator_get_skeleton";
+    set_animation           :: method(animation: string, loop: bool, track: s64, speed: float = 1) #foreign "spine_animator_set_animation";
+    set_skin                :: method(skin: string) #foreign "spine_animator_set_skin";
+    enable_skin             :: method(skin: string) #foreign "spine_animator_enable_skin";
+    disable_skin            :: method(skin: string) #foreign "spine_animator_disable_skin";
+    disable_all_skins       :: method() #foreign "spine_animator_disable_all_skins";
+    refresh_skins           :: method() #foreign "spine_animator_refresh_skins";
+    set_to_setup_pose       :: method() #foreign "spine_animator_set_to_setup_pose";
+    get_skins               :: method() -> []string #foreign "spine_animator_get_skins";
+} #foreign_struct "Spine_Animator" #size 280
+
+LOS_Caster :: class : Component {
+    radii: v2 #offset 64;
+} #foreign_struct "LOS_Caster" #size 88
+
+Shadow_Caster :: class : Component {
+    softness: v2 #offset 64;
+} #foreign_struct "Shadow_Caster" #size 128
+
+Light :: class : Component {
+    color:     v4    #offset 64;
+    radii:     v2    #offset 80;
+    intensity: float #offset 88;
+} #foreign_struct "Light" #size 120
+
+Spine_Event_Data :: struct {
+    event:        string;
+    int_value:    s64;
+    float_value:  float;
+    string_value: string;
+}
+
+Spine_Instance_Fields :: class {
+    state_machine:    State_Machine  #read_only #offset 48;
+    color_multiplier: v4                        #offset 72;
+    scale:            v2                        #offset 32;
+    speed_multiplier: float                     #offset 104;
+    color_replace_color: Color_Replace_Color #read_only #offset 144;
+    on_event_userdata:           Object #read_only #offset 192;
+    on_animation_start_userdata: Object #read_only #offset 208;
+    on_animation_end_userdata:   Object #read_only #offset 224;
+} #gc_root #foreign_struct "Spine_Instance" #size 264
+
+Spine_Instance_Base :: class : Spine_Instance_Fields {
+    set_color_replace_color :: method(color: Color_Replace_Color) #foreign "spine_instance_set_color_replace_color";
+    set_material            :: method(material: Material, transfer_ownership: bool) #foreign "spine_instance_set_material";
+    set_on_event            :: method(userdata: Object, callback: proc(userdata: Object, event: Spine_Event_Data)) #foreign "spine_instance_set_on_event";
+    set_on_animation_start  :: method(userdata: Object, callback: proc(userdata: Object, animation: string)) #foreign "spine_instance_set_on_animation_start";
+    set_on_animation_end    :: method(userdata: Object, callback: proc(userdata: Object, animation: string)) #foreign "spine_instance_set_on_animation_end";
+} #gc_root #foreign_struct "Spine_Instance" #size 264
+
+Camera :: struct {
+    position:            v2            #offset 0;
+    position_last_frame: v2 #read_only #offset 8;
+    size:                float         #offset 16;
+    follow_player:       bool          #offset 20;
+} #foreign_struct "Actual_Camera" #size 28
+
+Post_Processing :: struct {
+    Bloom_Config :: struct {
+        bloom_amount: float #offset 4;
+    } #foreign_struct "Bloom_Config" #size 8
+
+    Color_Grade_Config :: struct {
+        color_filter: v3    #offset 4;
+        saturation:   float #offset 16;
+        contrast:     float #offset 20;
+    } #foreign_struct "Color_Grade_Config" #size 24
+
+    Chromatic_Aberration_Config :: struct {
+        channel_offsets: v3 #offset 4;
+        focal_point:     v2 #offset 16;
+    } #foreign_struct "Chromatic_Aberration_Config" #size 24
+
+    Blur_Config :: struct {
+        directions: float #offset 4;
+        quality:    float #offset 8;
+        size:       float #offset 12;
+    } #foreign_struct "Blur_Config" #size 16
+
+    Film_Grain_Config :: struct {
+        strength:    float #offset 4;
+        noise_scale: float #offset 8;
+    } #foreign_struct "Film_Grain_Config" #size 12
+
+    Vignette_Config :: struct {
+        radius:   float #offset 4;
+        softness: float #offset 8;
+    } #foreign_struct "Vignette_Config" #size 12
+
+    bloom               :: proc(config: Bloom_Config)                 #foreign "post_processing_bloom";
+    color_grade         :: proc(config: Color_Grade_Config)           #foreign "post_processing_color_grade";
+    chromatic_aberration :: proc(config: Chromatic_Aberration_Config)  #foreign "post_processing_chromatic_aberration";
+    blur                :: proc(config: Blur_Config)                  #foreign "post_processing_blur";
+    film_grain          :: proc(config: Film_Grain_Config)            #foreign "post_processing_film_grain";
+    vignette            :: proc(config: Vignette_Config)              #foreign "post_processing_vignette";
+}
+
+AO_Player :: class : Component {
+    animator:               Spine_Animator      #read_only #offset 31504;
+    agent:                  Movement_Agent      #read_only #offset 120;
+    camera:                 Camera                         #offset 1552;
+    device_kind:            Device_Kind         #read_only #offset 1584;
+    do_name_color_override: bool                           #offset 30520;
+    name_color_override:    v4                             #offset 30524;
+    avatar_color:           Color_Replace_Color #read_only #offset 96;
+    default_inventory:      Inventory           #read_only #offset 31384;
+    comms_channel_listen_mask: u64                         #offset 1712;
+    comms_channel_speak_mask:  u64                         #offset 1720;
+    username_rect:             Rect                        #offset 31460;
+    full_nameplate_rect:       Rect                        #offset 31476;
+} #foreign_struct "Player" #size 31648
+
+Movement_Agent :: class : Component {
+    Set_Path_Target_Result :: struct {
+        success:        bool;
+        next_point:     v2;
+        move_direction: v2;
+    }
+    set_path_target        :: method(target: v2, speed: float) -> Set_Path_Target_Result #foreign "movement_agent_set_path_target";
+    set_navmesh_to_lock_to :: method(navmesh: Navmesh) #foreign "movement_agent_set_navmesh_to_lock_to";
+    movement_speed:   float #offset 168;
+    friction:         float #offset 64;
+    velocity:         v2    #offset 84;
+    input_this_frame: v2    #offset 92;
+} #foreign_struct "Movement_Agent" #size 7920
+
+Asset :: class {
+} #gc_root #foreign_struct "Asset_Base"
+
+Texture_Asset :: class : Asset {
+    get_width :: method() -> s64 #foreign "texture_asset_get_width";
+    get_height :: method() -> s64 #foreign "texture_asset_get_height";
+    get_aspect :: method() -> float #foreign "texture_asset_get_aspect";
+    get_uvs :: method() -> v2, v2 #foreign "texture_asset_get_uvs";
+} #foreign_struct "Texture"
+
+SFX_Asset :: class : Asset {
+} #foreign_struct "SFX_Asset"
+
+Spine_Asset :: class : Asset {
+} #foreign_struct "Spine_Skeleton_Data"
+
+Prefab_Asset :: class : Asset {
+} #foreign_struct "Prefab"
+
+Font_Asset :: class : Asset {
+} #foreign_struct "Font"
+
+Shader_Asset :: class : Asset {
+} #foreign_struct "Shader"
+
+Material :: class {
+    create      :: proc(shader: Shader_Asset) -> Material #foreign "material_create";
+    destroy     :: method() #foreign "material_destroy";
+    set_float   :: method(name: string, value: float) #foreign "material_set_float";
+    set_float2  :: method(name: string, value: v2) #foreign "material_set_float2";
+    set_float3  :: method(name: string, value: v3) #foreign "material_set_float3";
+    set_float4  :: method(name: string, value: v4) #foreign "material_set_float4";
+    set_int     :: method(name: string, value: int) #foreign "material_set_int";
+    set_texture :: method(name: string, texture: Texture_Asset) #foreign "material_set_texture";
+} #gc_root #foreign_struct "Pooled_User_Material" #size 32
+
+State_Machine :: class {
+    create :: proc() -> State_Machine #foreign "state_machine_create";
+    destroy          :: method() #foreign "state_machine_destroy";
+    set_trigger      :: method(variable_name: string) #foreign "state_machine_set_trigger";
+    set_bool         :: method(variable_name: string, value: bool) #foreign "state_machine_set_bool";
+    set_int          :: method(variable_name: string, value: int) #foreign "state_machine_set_int";
+    set_float        :: method(variable_name: string, value: float) #foreign "state_machine_set_float";
+    update           :: method(dt: float) #foreign "state_machine_update";
+    try_get_layer    :: method(layer_name: string) -> State_Machine_Layer #foreign "state_machine_try_get_layer";
+    create_layer     :: method(layer_name: string, track: s64) -> State_Machine_Layer #foreign "state_machine_create_layer";
+    create_variable  :: method(variable_name: string, kind: State_Machine_Variable.Kind) -> State_Machine_Variable #foreign "state_machine_create_variable";
+    try_get_variable :: method(variable_name: string) -> State_Machine_Variable #foreign "state_machine_try_get_variable";
+    self: State_Machine #read_only #offset 120;
+    debug_enabled: bool            #offset 128;
+} #gc_root #foreign_struct "State_Machine" #size 160
+
+State_Machine_Layer :: class {
+    get_state_machine        :: method() -> State_Machine #foreign "state_machine_layer_get_state_machine";
+    get_initial_state        :: method() -> State_Machine_State #foreign "state_machine_layer_get_initial_state";
+    set_initial_state        :: method(state: State_Machine_State) #foreign "state_machine_layer_set_initial_state";
+    create_state             :: method(state_name: string, loop: bool, duration: float = 0) -> State_Machine_State #foreign "state_machine_layer_create_state";
+    get_current_state        :: method() -> State_Machine_State #foreign "state_machine_layer_get_current_state";
+    try_get_state            :: method(state_name: string) -> State_Machine_State #foreign "state_machine_layer_try_get_state";
+    create_transition        :: method(from_state: State_Machine_State, to_state: State_Machine_State, require_state_complete: bool) -> State_Machine_Transition #foreign "state_machine_layer_create_transition";
+    create_global_transition :: method(to_state: State_Machine_State, allow_transition_to_self: bool) -> State_Machine_Transition #foreign "state_machine_layer_create_global_transition";
+    get_current_state_length :: method() -> float #foreign "state_machine_layer_get_current_state_length";
+    reset_to_initial_state   :: method() #foreign "state_machine_layer_reset_to_initial_state";
+    self: State_Machine_Layer #read_only #offset 136;
+} #gc_root #foreign_struct "State_Machine_Layer" #size 168
+
+State_Machine_State :: class {
+    get_name :: method() -> string #foreign "state_machine_state_get_name";
+    self:  State_Machine_State #read_only #offset 48;
+    speed: float                          #offset 72;
+} #gc_root #foreign_struct "State_Machine_State" #size 120
+
+State_Machine_Variable :: class {
+    Kind :: enum {
+        INVALID;
+        BOOL;
+        TRIGGER;
+        FLOAT;
+        INT;
+    }
+    self: State_Machine_Variable #read_only #offset 48;
+} #gc_root #foreign_struct "State_Machine_Variable" #size 80
+
+State_Machine_Transition :: class {
+    Numeric_Condition_Kind :: enum {
+        INVALID;
+        GREATER;
+        GREATER_EQUAL;
+        LESS;
+        LESS_EQUAL;
+        EQUAL;
+    }
+    create_trigger_condition :: method(variable: State_Machine_Variable) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_trigger_condition";
+    create_bool_condition    :: method(variable: State_Machine_Variable, value: bool) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_bool_condition";
+    create_float_condition   :: method(variable: State_Machine_Variable, value: float, kind: Numeric_Condition_Kind) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_float_condition";
+    create_int_condition     :: method(variable: State_Machine_Variable, value: int, kind: Numeric_Condition_Kind) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_int_condition";
+    self: State_Machine_Transition #read_only #offset 24;
+} #gc_root #foreign_struct "State_Machine_Transition" #size 96
+
+State_Machine_Transition_Condition :: class {
+    self: State_Machine_Transition_Condition #read_only #offset 32;
+} #gc_root #foreign_struct "State_Machine_Transition_Condition" #size 64
+
+SFX_Channel :: enum {
+    SFX;
+    MUSIC;
+}
+
+SFX_Desc :: struct {
+    local_only:       bool                       #offset 0;
+    positional:       bool                       #offset 1;
+    position:         v2              #read_only #offset 4;
+    delay:            float                      #offset 12;
+    volume:           float                      #offset 16;
+    speed:            float                      #offset 20;
+    volume_perturb:   float                      #offset 24;
+    speed_perturb:    float                      #offset 28;
+    range_multiplier: float                      #offset 32;
+    loop_timeout:     float                      #offset 36;
+    entity_to_follow: u64                        #offset 40;
+    loop:             bool                       #offset 48;
+    channel:          SFX_Channel                #offset 56;
+    set_position :: method(p: v2) {
+        positional = true;
+        #unsafe position = p;
+    }
+} #foreign_struct "SFX::Play_Sound_Desc" #size 72
+
+Text_Settings :: struct {
+    Vertical_Alignment :: enum {
+        TOP;
+        CENTER;
+        BOTTOM;
+    }
+    Horizontal_Alignment :: enum {
+        LEFT;
+        CENTER;
+        RIGHT;
+    }
+    font:                   Font_Asset           #offset 0;
+    size:                   float                #offset 8;
+    color:                  v4                   #offset 12;
+    valign:                 Vertical_Alignment   #offset 32;
+    halign:                 Horizontal_Alignment #offset 40;
+    word_wrap:              bool                 #offset 48;
+    overflow_wrap:          bool                 #offset 49;
+    word_wrap_start_offset: float                #offset 52;
+    offset:                 v2                   #offset 56;
+    do_drop_shadow:         bool                 #offset 64;
+    drop_shadow_offset:     v2                   #offset 68;
+    drop_shadow_color:      v4                   #offset 76;
+    do_outline:             bool                 #offset 92;
+    outline_thickness:      float                #offset 96;
+    outline_color:          v4                   #offset 100;
+    weight:                 float                #offset 116;
+    slant:                  float                #offset 120;
+    spacing_multiplier:     float                #offset 124;
+    line_height_multiplier: float                #offset 128;
+    do_autofit:             bool                 #offset 132;
+    autofit_min_size:       float                #offset 136;
+    autofit_max_size:       float                #offset 140;
+    autofit_iters:          s32                  #offset 144;
+} #foreign_struct "UI::Text_Settings" #size 152
+
+Texture_Nine_Slice_Data :: struct {
+    slice:       v4    #offset 0;
+    slice_scale: float #offset 16;
+} #foreign_struct "Texture_Nine_Slice_Data" #size 20
+
+Button_Settings :: struct {
+    color:                       v4                      #offset 0;
+    hovered_color:               v4                      #offset 16;
+    pressed_color:               v4                      #offset 32;
+    disabled_color:              v4                      #offset 48;
+    color_multiplier:            v4                      #offset 64;
+    background_color_multiplier: v4                      #offset 80;
+    press_scaling:               float                   #offset 96;
+    sprite:                      Texture_Asset           #offset 104;
+    sprite_hovered:              Texture_Asset           #offset 112;
+    sprite_pressed:              Texture_Asset           #offset 120;
+    sprite_padding:              v4                      #offset 128;
+    nine_slice_data:             Texture_Nine_Slice_Data #offset 144;
+    hover_offset:                v2                      #offset 164;
+    text_pressed_offset:         v2                      #offset 172;
+    text_unpressed_offset:       v2                      #offset 180;
+    click_sound:                 SFX_Asset               #offset 192;
+    click_sound_desc:            SFX_Desc                #offset 208;
+    stay_hot_while_active:       bool                    #offset 280;
+    return_to_center_to_cancel:  bool                    #offset 281;
+    sprite_fit_aspect:           bool                    #offset 282;
+    keybind:                     u64                     #offset 288;
+} #foreign_struct "UI::Button_Settings" #size 296
+
+Interact_Mouse_Button :: struct {
+    time_last_clicked: float #offset 0;
+    active:            bool  #offset 4;
+    newly_active:      bool  #offset 5;
+    clicked:           bool  #offset 6;
+    double_clicked:    bool  #offset 7;
+    released:          bool  #offset 8;
+} #foreign_struct "UI::Mouse_Button_Data" #size 12
+
+Interact_Result :: struct {
+    hovering:             bool              #offset 0;
+    just_pressed:         bool              #offset 1;
+    pressed:              bool              #offset 2;
+    released:             bool              #offset 3;
+    active:               bool              #offset 4;
+    clicked:              bool              #offset 5;
+    double_clicked:       bool              #offset 6;
+    enter_pressed:        bool              #offset 7;
+    tab_pressed:          bool              #offset 8;
+    escape_pressed:       bool              #offset 9;
+    modified_text_input:  bool              #offset 10;
+    became_inactive:      bool              #offset 11;
+    right:                Interact_Mouse_Button #offset 24;
+    active_t:             float             #offset 48;
+    active_t_eased:       float             #offset 52;
+    hover_t:              float             #offset 56;
+    hover_t_eased:        float             #offset 60;
+    clicked_t:            float             #offset 64;
+    clicked_t_eased:      float             #offset 68;
+    dropped_payload:      bool              #offset 72;
+    can_receive_payload:  bool              #offset 73;
+    will_receive_payload: bool              #offset 74;
+    drag_drop_payload:    Object            #offset 80;
+    button_color:         v4                #offset 92;
+    hover_offset:         v2                #offset 108;
+    text_rect_is_valid:   bool              #offset 128;
+    rect:                 Rect              #offset 132;
+    text_rect_:           Rect              #offset 148;
+    ui_scale:             float             #offset 164;
+    mouse_position:       v2                #offset 168;
+} #foreign_struct "UI::Interact_Result" #size 176
+
+Item_Definition_Desc :: struct {
+    id:              string          #offset 0;
+    name:            string          #offset 16;
+    icon:            Texture_Asset   #offset 32;
+    stack_size:      s64             #offset 40;
+    tier:            Item_Tier       #offset 48;
+} #foreign_struct "CSL_Item_Definition_Desc" #size 56
+
+Item_Definition_Base :: class {
+    self: Item_Definition #read_only #offset 88;
+    type: typeid          #read_only #offset 96;
+    instance_type: typeid #read_only #offset 104;
+    tier: Item_Tier       #read_only #offset 72;
+} #gc_root #foreign_struct "Item_Definition" #size 128
+
+Item_Instance_Base :: class {
+    self: Item_Instance   #read_only #offset 144;
+    inventory: Inventory  #read_only #offset 152;
+    slot_index: s64       #read_only #offset 56;
+    quantity:   s64       #read_only #offset 40;
+} #gc_root #foreign_struct "Item_Instance" #size 160
+
+Inventory_Base :: class {
+    self: Inventory #read_only #offset 88;
+    capacity: s64   #read_only #offset 32;
+} #gc_root #foreign_struct "Inventory" #size 96
+
+Inventory_Draw_Options :: struct {
+    title:                      string  #offset 0;
+    show_exit_button:           bool    #offset 16;
+    show_scroll_bar:            bool    #offset 17;
+    show_background:            bool    #offset 18;
+    allow_drag_drop:            bool    #offset 19;
+    drag_drop_color_multiplier: v4      #offset 20;
+    hotbar_item_count:          s32     #offset 36;
+    columns:                    s32     #offset 40;
+    rows:                       s32     #offset 44;
+    force_select_hotbar_index:  s32     #offset 48;
+    hide_bag_button:            bool    #offset 52;
+    enable_selection:           bool    #offset 53;
+    scroll_item_selection:      bool    #offset 54;
+    keyboard_item_selection:    bool    #offset 55;
+    enable_use_from_hotbar:     bool    #offset 56;
+    default :: proc() -> Inventory_Draw_Options {
+        desc: Inventory_Draw_Options;
+        desc.force_select_hotbar_index = -1;
+        desc.hotbar_item_count = 6;
+        desc.allow_drag_drop = true;
+        desc.drag_drop_color_multiplier = .{1, 1, 1, 1};
+        desc.enable_selection = true;
+        desc.scroll_item_selection = true;
+        desc.keyboard_item_selection = true;
+        return desc;
+    }
+} #foreign_struct "Inventory_Draw_Options" #size 80
+
+Draw_Hotbar_Result :: struct {
+    selected_item:       Item_Instance #offset 0;
+    selected_item_index: s64           #offset 8;
+    dropped_item:        Item_Instance #offset 16;
+    entire_rect:         Rect          #offset 24;
+    inventory_open:      bool          #offset 40;
+    inventory_open_t:    float         #offset 44;
+} #foreign_struct "Inventory_Manager::Draw_Hotbar_Result" #size 48
+

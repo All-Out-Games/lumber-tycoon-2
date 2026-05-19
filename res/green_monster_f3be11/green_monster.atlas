@@ -1,0 +1,135 @@
+f3be11f718eaf04c.png
+	size: 792, 792
+	filter: Linear, Linear
+Arm_L
+	bounds: 260, 548, 307, 73
+Arm_R
+	bounds: 133, 138, 320, 73
+	rotate: 90
+Body
+	bounds: 6, 464, 121, 322
+Body_chomp
+	bounds: 6, 136, 121, 322
+EyeBack_L
+	bounds: 721, 171, 45, 60
+	offsets: 1, 1, 47, 61
+EyeBack_R
+	bounds: 367, 282, 26, 57
+	offsets: 1, 1, 28, 58
+	rotate: 90
+Eye_L
+	bounds: 430, 283, 25, 33
+	offsets: 1, 1, 27, 35
+	rotate: 90
+green/Eye_L
+	bounds: 430, 283, 25, 33
+	offsets: 1, 1, 27, 35
+	rotate: 90
+Eye_R
+	bounds: 767, 752, 15, 34
+	offsets: 1, 1, 17, 35
+Grenade - Copy (4)
+	bounds: 369, 26, 109, 137
+	offsets: 2, 2, 113, 141
+	rotate: 90
+Hand_L
+	bounds: 6, 8, 122, 134
+	rotate: 90
+Hand_R
+	bounds: 229, 13, 122, 134
+	rotate: 90
+Head
+	bounds: 610, 678, 108, 151
+	offsets: 1, 1, 110, 152
+	rotate: 90
+Head_spook
+	bounds: 573, 480, 108, 138
+	offsets: 1, 1, 110, 140
+	rotate: 90
+Leg_L_A
+	bounds: 494, 174, 68, 133
+Leg_L_B
+	bounds: 146, 7, 125, 77
+	offsets: 1, 1, 127, 79
+	rotate: 90
+Leg_R_A
+	bounds: 717, 473, 68, 115
+Leg_R_B
+	bounds: 481, 313, 152, 78
+	offsets: 1, 1, 154, 80
+	rotate: 90
+Shadow
+	bounds: 260, 706, 344, 80
+	offsets: 1, 1, 346, 82
+green/Shadow
+	bounds: 260, 706, 344, 80
+	offsets: 1, 1, 346, 82
+Shoulder_L
+	bounds: 676, 317, 62, 74
+	offsets: 1, 1, 64, 76
+Tongue
+	bounds: 654, 208, 99, 41
+	rotate: 90
+green/Tongue
+	bounds: 654, 208, 99, 41
+	rotate: 90
+crewmate_carried
+	bounds: 212, 269, 189, 149
+	offsets: 14, 21, 204, 189
+	rotate: 90
+green/Arm_L
+	bounds: 260, 471, 305, 71
+green/Arm_R
+	bounds: 260, 627, 320, 73
+green/Body
+	bounds: 133, 464, 121, 322
+green/EyeBack_L
+	bounds: 721, 120, 45, 60
+	offsets: 1, 1, 47, 62
+	rotate: 90
+green/EyeBack_R
+	bounds: 660, 75, 26, 57
+	offsets: 1, 1, 28, 59
+	rotate: 90
+green/Eye_R
+	bounds: 744, 638, 15, 34
+	offsets: 1, 1, 17, 36
+green/Hand_L
+	bounds: 212, 141, 122, 135
+	rotate: 90
+green/Hand_R
+	bounds: 353, 141, 122, 135
+	rotate: 90
+green/Head
+	bounds: 367, 314, 108, 151
+	offsets: 1, 1, 110, 153
+green/Leg_L_A
+	bounds: 512, 35, 68, 133
+green/Leg_L_B
+	bounds: 571, 397, 125, 77
+	offsets: 1, 1, 127, 79
+green/Leg_R_A
+	bounds: 586, 66, 68, 115
+green/Leg_R_B
+	bounds: 586, 594, 152, 78
+	offsets: 1, 1, 154, 80
+green/Shoulder_L
+	bounds: 701, 237, 62, 74
+	offsets: 1, 1, 64, 76
+spurt/spurt1
+	bounds: 702, 404, 77, 63
+	offsets: 1, 1, 79, 65
+spurt/spurt2
+	bounds: 568, 187, 120, 80
+	offsets: 1, 1, 122, 82
+	rotate: 90
+spurt/spurt3
+	bounds: 565, 313, 105, 78
+	offsets: 1, 1, 107, 80
+spurt/spurt4
+	bounds: 660, 107, 55, 95
+	offsets: 1, 1, 57, 97
+spurt/spurt5
+	bounds: 586, 6, 54, 110
+	offsets: 1, 1, 56, 112
+	rotate: 90

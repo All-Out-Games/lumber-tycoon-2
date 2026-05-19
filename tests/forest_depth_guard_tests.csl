@@ -1,0 +1,27 @@
+test_forest_slowdown_clear_base :: proc() {
+    Test.teleport({0, 0});
+    Test.wait_seconds(0.5);
+    Test.assert_var_bool("clear base not slowed", "g_observed_forest_slowed", false);
+    Test.assert_var_float("clear base full speed", "g_observed_forest_speed_multiplier", 1.0, 0.01);
+}
+
+test_forest_slowdown_near_dense_trees :: proc() {
+    Test.teleport({10, 0});
+    Test.wait_seconds(0.5);
+    Test.assert_var_bool("near dense trees slowed", "g_observed_forest_slowed", true);
+    Test.assert_var_float("near dense tree speed", "g_observed_forest_speed_multiplier", 0.65, 0.08);
+}
+
+test_forest_slowdown_farther_from_base :: proc() {
+    Test.teleport({20, 10});
+    Test.wait_seconds(0.5);
+    Test.assert_var_bool("far dense trees slowed", "g_observed_forest_slowed", true);
+    Test.assert_var_float("far dense tree speed lower", "g_observed_forest_speed_multiplier", 0.57, 0.12);
+}
+
+test_forest_slowdown_far_edge_canopy :: proc() {
+    Test.teleport({60, 0});
+    Test.wait_seconds(0.5);
+    Test.assert_var_bool("far canopy slowed", "g_observed_forest_slowed", true);
+    Test.assert_var_float("far canopy much slower", "g_observed_forest_speed_multiplier", 0.19, 0.08);
+}

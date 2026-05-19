@@ -1,0 +1,76 @@
+GLSL
+Vertex Shader:
+#version 300 es
+precision highp float;
+precision highp int;
+
+struct type_params
+{
+    mat4 mvp;
+    vec4 resolution_time;
+    int matrix_image_size;
+};
+
+uniform type_params params;
+
+layout(location = 0) in vec2 in_var_POS;
+layout(location = 1) in vec2 in_var_UV;
+layout(location = 3) in vec4 in_var_COLOR;
+out vec4 var_COLOR0;
+out vec2 var_UV;
+
+void main()
+{
+    var_COLOR0 = in_var_COLOR;
+    var_UV = in_var_UV;
+    gl_Position = vec4(in_var_POS, 0.0, 1.0) * params.mvp;
+}
+
+
+
+Fragment Shader:
+#version 300 es
+precision highp float;
+precision highp int;
+
+struct type_user_input
+{
+    float rainbowScale;
+    float hueSpeed;
+    float hueSaturation;
+    float hueValue;
+    float tintStrength;
+    float outlineLow;
+    float outlineHigh;
+};
+
+uniform type_user_input user_input;
+
+struct type_params
+{
+    mat4 mvp;
+    vec4 resolution_time;
+    int matrix_image_size;
+};
+
+uniform type_params params;
+
+uniform highp sampler2D albedo;
+
+in vec4 var_COLOR0;
+in vec2 var_UV;
+layout(location = 0) out vec4 out_var_SV_Target0;
+
+void main()
+{
+    vec4 _59 = var_COLOR0 * texture(albedo, var_UV);
+    float _76 = clamp(user_input.hueSaturation, 0.0, 1.0);
+    float _79 = clamp(user_input.hueValue, 0.0, 1.0);
+    float _92 = _59.x;
+    float _93 = _59.y;
+    float _94 = _59.z;
+    float _95 = isnan(_94) ? _93 : (isnan(_93) ? _94 : max(_93, _94));
+    float _110 = _59.w;
+    out_var_SV_Target0 = vec4(clamp(mix(_59.xyz, mix(vec3(1.0), clamp(abs((fract(vec3(fract((var_UV.x * 0.89999997615814208984375 + (var_UV.y * 0.5)) * (isnan(user_input.rainbowScale) ? 0.00999999977648258209228515625 : (isnan(0.00999999977648258209228515625) ? user_input.rainbowScale : max(0.00999999977648258209228515625, user_input.rainbowScale))) + (params.resolution_time.z * user_input.hueSpeed)), _76, _79).xxx + vec3(1.0, 0.666666686534881591796875, 0.3333333432674407958984375)) * 6.0) - vec3(3.0)) - vec3(1.0), vec3(0.0), vec3(1.0)), vec3(_76)) * _79, vec3(clamp(user_input.tintStrength, 0.0, 1.0) * smoothstep(user_input.outlineLow, user_input.outlineHigh, isnan(_95) ? _92 : (isnan(_92) ? _95 : max(_92, _95))))), vec3(0.0), vec3(1.0)) * _110, _110);
+}
+

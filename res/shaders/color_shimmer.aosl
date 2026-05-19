@@ -1,0 +1,132 @@
+!!inputs {
+	texture albedo ALBEDO
+	texture noise_texture NOISE
+	float3 paletteShadow // palette color used in darkest areas
+	float3 paletteMid // palette color for mid luminance
+	float3 paletteHi // palette color for brightest areas
+	float paletteBlackPoint // input luminance treated as black (0 after normalization)
+	float paletteWhitePoint // input luminance treated as white (1 after normalization)
+	float paletteGamma // curve applied to normalized luminance before palette lookup
+	float tintStrength // overall tint weight (0=keep original, 1=full palette)
+	float shadowBoost // extra tint applied to darker areas to avoid washout
+	// Outline controls
+	float outlineLow // start of non-outline threshold (maxRGB)
+	float outlineHigh // end of non-outline threshold
+	float outlineDarken // how much to darken outlines (0..1)
+	float outlineLumaMin // grayscale luma at pure black outline
+	float outlineLumaMax // grayscale luma at outline edge (lighter)
+}
+
+!!pipeline {
+	Pixel_Format: RGBA8_SRGB
+	Blend_Enabled: true
+	Depth_Enabled: true
+	Blend_Src: ONE
+	Blend_Dst: ONE_MINUS_SRC_ALPHA
+	Blend_Op: ADD
+	Alpha_Blend_Src: ONE
+	Alpha_Blend_Dst: ONE
+	Alpha_Blend_Op: ADD
+	Blend_Color: (1, 1, 1, 1)
+}
+
+!!vs
+struct vs_out {
+	float4 color: COLOR0;
+	float2 uv: UV;
+	float2 shadow_uv: TEXCOORD0;
+	float4 pos: SV_Position;
+};
+vs_out vs_main(vs_in inp) {
+	vs_out outp;
+	outp.pos = mul(mvp, float4(inp.pos.xy, 0, 1.0f));
+	outp.uv = inp.uv;
+	outp.color = inp.color;
+	outp.shadow_uv = (outp.pos.xy + float2(1,1)) / 2;
+	return outp;
+}
+
+!!ps
+float noise(float2 p)
+{
+	float s = noise_texture.Sample(noise_texture_smp, float2(1.0f, 2.0f - 2.0f*cos(resolution_time.z))*resolution_time.z*20.0f + p*1.0f).x;
+	s *= s;
+	return s;
+}
+
+float ramp(float y, float start, float end)
+{
+	float inside = step(start,y) - step(end,y);
+	float fact = (y-start)/(end-start)*inside;
+	return (1.-fact) * inside;
+}
+
+float4 ps_main(float4 vtxColor: COLOR0, float2 uv: UV, float2 shadow_uv: TEXCOORD0): SV_Target0 {
+	float4 base = vtxColor * albedo.Sample(albedo_smp, uv);
+
+	// Detect near-black outlines (keep as-is), tint everything else to gold
+	float luma = dot(base.rgb, float3(0.299f, 0.587f, 0.114f));
+	float maxRGB = max(base.r, max(base.g, base.b));
+	float nonOutline = smoothstep(outlineLow, outlineHigh, maxRGB); // 0 near black, 1 otherwise
+
+	// Normalize base luminance so dark/light source art maps consistently into the palette
+	float denom = max(0.001f, paletteWhitePoint - paletteBlackPoint);
+	float lNorm = saturate((luma - paletteBlackPoint) / denom);
+	// shade: gamma-adjusted luminance used to drive palette interpolation
+	float shade = pow(lNorm, max(0.01f, paletteGamma));
+	float3 toneA = lerp(paletteShadow, paletteMid, smoothstep(0.00f, 0.60f, shade));
+	float3 goldTone = lerp(toneA, paletteHi,  smoothstep(0.65f, 1.00f, shade));
+
+	// Darker bases get stronger tint using shadowBoost
+	float boost = lerp(1.0f, 1.0f + shadowBoost, 1.0f - shade);
+	float tintW = saturate(tintStrength * nonOutline * boost);
+	float3 rgb = lerp(base.rgb, goldTone, tintW);
+
+	// Strengthen and shape outlines: remap outline region to grayscale from black → dark gray
+	float outlineMask = 1.0f - nonOutline;
+	float edge = 1.0f - outlineMask; // 0 at pure black, 1 at outline boundary
+	float targetLuma = lerp(outlineLumaMin, outlineLumaMax, edge);
+	float3 outlineGray = float3(targetLuma, targetLuma, targetLuma);
+	rgb = lerp(rgb, outlineGray, outlineMask * saturate(outlineDarken));
+
+	// Vibrance: boost saturation of non-outline mid/high tones
+	float3 gray = float3(luma, luma, luma);
+	float vibrance = 0.38f;
+	float vibMask = nonOutline * smoothstep(0.12f, 0.95f, shade);
+	rgb = saturate(gray + (rgb - gray) * (1.0f + vibrance * vibMask));
+
+	// Shimmer: animated noise + diagonal wave + sweeping band (no aura/specular)
+	float t = resolution_time.z;
+	float n1 = noise(uv*3.0f + float2(0.00f, 0.00f));
+	float n2 = noise(uv*6.0f + float2(5.20f, 1.30f));
+	float diagonal = sin((uv.x + uv.y)*24.0f + t*7.5f)*0.5f + 0.5f;
+	float diagonal2 = sin((uv.x*1.3f - uv.y*1.1f)*34.0f + t*5.5f)*0.5f + 0.5f;
+	float sweepCoord = fmod(uv.x*0.9f + uv.y*0.7f + t*0.85f, 1.0f);
+	float sweep = ramp(sweepCoord, 0.35f, 0.65f);
+	float baseNoise = (n1*0.6f + n2*0.4f);
+	baseNoise = smoothstep(0.30f, 0.95f, baseNoise);
+	float shimmer = baseNoise*0.95f + (diagonal*0.22f + diagonal2*0.18f) + sweep*1.25f;
+	shimmer *= nonOutline * smoothstep(0.06f, 1.00f, luma);
+	shimmer = saturate(shimmer);
+	float hot = smoothstep(0.78f, 1.0f, shimmer) * 0.85f;
+	float3 shimmerColor = float3(1.00f, 0.98f, 0.96f); // near-white
+	float whiten = saturate(shimmer*0.35f + hot*0.85f);
+	rgb = lerp(rgb, float3(1.0f, 1.0f, 1.0f), whiten);
+	rgb += shimmer * shimmerColor * 0.12f; // subtle additive to keep sparkle energy
+
+	// Keep only sparkles (no aura/specular/sweep)
+	float spA = noise(uv*45.0f + float2(7.3f, 3.1f));
+	float spB = noise(uv*85.0f + float2(1.1f, 9.7f));
+	float twinkle = sin(t*12.0f + spA*9.0f)*0.5f + 0.5f;
+	float sparkleMask = spA*0.7f + spB*0.3f + (twinkle-0.5f)*0.20f;
+	float sparkle = step(0.965f, sparkleMask) * nonOutline * smoothstep(0.15f, 1.00f, luma);
+	float3 sparkleColor = float3(1.00f, 0.95f, 0.55f);
+	rgb += sparkle * sparkleColor * 1.35f;
+
+	// Premultiply and output
+	rgb = saturate(rgb);
+	rgb *= base.a;
+	return float4(rgb, base.a);
+}
+
+

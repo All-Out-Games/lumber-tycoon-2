@@ -1,0 +1,242 @@
+Hashtable :: struct($Key: typeid, $Value: typeid) {
+    Hashtable_Entry :: struct {
+        hash:  u64;
+        key:   Key;
+        value: Value;
+    }
+
+    HASH_EMPTY :: 0u64;
+    LOAD_FACTOR :: 75;
+    DEFAULT_SIZE :: 16;
+
+    entries:       []Hashtable_Entry;
+    count:         s64;
+    capacity:      s64;
+    capacity_mask: u64;
+    load_factor:   s64;
+
+    reserve :: method(min_capacity: s64) {
+        cap := next_power_of_two(max(min_capacity, DEFAULT_SIZE));
+        entries = new(Hashtable_Entry, cap);
+        count = 0;
+        capacity = cap;
+        capacity_mask = cap.(u64) - 1;
+        load_factor = (cap * LOAD_FACTOR) / 100;
+    }
+
+    // Returns the index of the matching entry, or the first empty slot.
+    // Caller checks entries[index].hash to distinguish found vs not-found.
+    find_slot :: method(key: Key, h: u64) -> s64 {
+        probe := h;
+        while true {
+            index := (probe & capacity_mask).(int);
+            if entries[index].hash == HASH_EMPTY {
+                return index;
+            }
+            if entries[index].key == key {
+                return index;
+            }
+            probe += 1;
+        }
+        return -1;
+    }
+
+    maybe_resize :: method() -> bool {
+        if (count + 1) < load_factor {
+            return false;
+        }
+
+        old_entries := entries;
+        old_capacity := capacity;
+
+        new_cap := old_capacity * 2;
+        if new_cap == 0 {
+            new_cap = DEFAULT_SIZE;
+        }
+
+        entries = new(Hashtable_Entry, new_cap);
+        count = 0;
+        capacity = new_cap;
+        capacity_mask = new_cap.(u64) - 1;
+        load_factor = (new_cap * LOAD_FACTOR) / 100;
+
+        for i: 0..old_capacity-1 {
+            if old_entries[i].hash != HASH_EMPTY {
+                add(old_entries[i].key, old_entries[i].value);
+            }
+        }
+
+        return true;
+    }
+
+    add :: method(key: Key, value: Value) {
+        maybe_resize();
+
+        h := hash_key(key);
+        index := find_slot(key, h);
+
+        assert(entries[index].hash == HASH_EMPTY, "duplicate key in hashtable: %", {key});
+
+        entries[index].hash = h;
+        entries[index].key = key;
+        entries[index].value = value;
+        count += 1;
+    }
+
+    add_or_overwrite :: method(key: Key, value: Value) {
+        if capacity == 0 {
+            reserve(DEFAULT_SIZE);
+        }
+
+        h := hash_key(key);
+        index := find_slot(key, h);
+
+        if entries[index].hash != HASH_EMPTY {
+            entries[index].value = value;
+            return;
+        }
+
+        if maybe_resize() {
+            add(key, value);
+            return;
+        }
+
+        entries[index].hash = h;
+        entries[index].key = key;
+        entries[index].value = value;
+        count += 1;
+    }
+
+    // Returns true if the key already existed (value unchanged).
+    // Returns false if the key was inserted with the given value.
+    try_add :: method(key: Key, value: Value) -> bool {
+        if capacity == 0 {
+            reserve(DEFAULT_SIZE);
+        }
+
+        h := hash_key(key);
+        index := find_slot(key, h);
+
+        if entries[index].hash != HASH_EMPTY {
+            return true;
+        }
+
+        if maybe_resize() {
+            add(key, value);
+            return false;
+        }
+
+        entries[index].hash = h;
+        entries[index].key = key;
+        entries[index].value = value;
+        count += 1;
+        return false;
+    }
+
+    contains :: method(key: Key) -> bool {
+        if capacity == 0 return false;
+        h := hash_key(key);
+        index := find_slot(key, h);
+        return entries[index].hash != HASH_EMPTY;
+    }
+
+    find :: method(key: Key) -> Value, bool {
+        if capacity == 0 {
+            return {}, false;
+        }
+        h := hash_key(key);
+        index := find_slot(key, h);
+        if entries[index].hash != HASH_EMPTY {
+            return entries[index].value, true;
+        }
+        return {}, false;
+    }
+
+    remove :: method(key: Key) -> bool {
+        if capacity == 0 return false;
+
+        h := hash_key(key);
+        index := find_slot(key, h);
+        if entries[index].hash == HASH_EMPTY {
+            return false;
+        }
+
+        entries[index].hash = HASH_EMPTY;
+
+        // backward-shift deletion for open addressing
+        assert(index >= 0, "index was negative");
+        i := index.(u64);
+        j := i;
+        while true {
+            j = (j + 1) & capacity_mask;
+            if entries[j.(int)].hash == HASH_EMPTY {
+                break;
+            }
+            k := entries[j.(int)].hash & capacity_mask;
+            should_move := true;
+            if i <= j {
+                if i < k && k <= j {
+                    should_move = false;
+                }
+            } else {
+                if i < k || k <= j {
+                    should_move = false;
+                }
+            }
+            if should_move {
+                entries[i.(int)] = entries[j.(int)];
+                entries[j.(int)].hash = HASH_EMPTY;
+                i = j;
+            }
+        }
+
+        count -= 1;
+        return true;
+    }
+
+    clear :: method() {
+        for i: 0..capacity-1 {
+            entries[i].hash = HASH_EMPTY;
+        }
+        count = 0;
+    }
+
+    Iterator :: struct {
+        entries:       []Hashtable_Entry;
+        cursor:        s64;
+        current:       Value;
+        current_index: Key;
+
+        next :: method() -> bool {
+            while cursor < entries.count {
+                if entries[cursor].hash != HASH_EMPTY {
+                    current_index = entries[cursor].key;
+                    current       = entries[cursor].value;
+                    cursor += 1;
+                    return true;
+                }
+                cursor += 1;
+            }
+            return false;
+        }
+    }
+
+    iterator :: method() -> Iterator {
+        iterator: Iterator;
+        iterator.entries = entries;
+        return iterator;
+    }
+
+    hash_key :: proc(key: Key, h: u64 = 0) -> u64 {
+        result: u64;
+        #if Key == string {
+            result = hash_murmur32(key.count == 0 ? null : &key.data.*, key.count, h);
+        } else {
+            result = hash_murmur32((&key).(*u8), #size_of(Key), h);
+        }
+        if result == 0 {
+            result = 1;
+        }
+        return result;
+    }
+}

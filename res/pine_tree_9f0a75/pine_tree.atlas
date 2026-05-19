@@ -1,0 +1,21 @@
+9f0a75ebf46109a1.png
+	size: 1024, 1024
+	filter: Linear, Linear
+chop tree/_tree_cut_bottom
+	bounds: 103, 915, 115, 92
+	offsets: 1, 1, 117, 94
+chop tree/_tree_cut_top
+	bounds: 505, 668, 339, 502
+	offsets: 1, 1, 341, 503
+	rotate: 90
+chop tree/tree_intact
+	bounds: 224, 892, 115, 275
+	offsets: 1, 1, 117, 276
+	rotate: 90
+chop tree/tree_leaves
+	bounds: 6, 547, 339, 438
+	offsets: 1, 1, 341, 440
+	rotate: 90
+chop tree/wood_icon
+	bounds: 6, 929, 91, 78
+	offsets: 1, 1, 93, 80

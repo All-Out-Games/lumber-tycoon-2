@@ -1,0 +1,29 @@
+51cf0b592136b770.png
+	size: 360, 912
+	filter: Linear, Linear
+ShopKeeper/Hat
+	bounds: 3, 37, 108, 81
+	offsets: 1, 1, 110, 83
+ShopKeeper/Head
+	bounds: 3, 654, 354, 252
+	offsets: 1, 1, 356, 254
+ShopKeeper/Left_Arm
+	bounds: 3, 121, 225, 132
+ShopKeeper/Left_Eye
+	bounds: 114, 3, 63, 61
+	offsets: 1, 1, 65, 63
+ShopKeeper/Left_Shoulder
+	bounds: 162, 256, 156, 148
+	offsets: 1, 1, 158, 150
+ShopKeeper/Right_Arm
+	bounds: 221, 28, 225, 132
+	rotate: 90
+ShopKeeper/Rigth_Eye
+	bounds: 114, 67, 63, 61
+	offsets: 1, 1, 65, 63
+ShopKeeper/Rigth_Shoulder
+	bounds: 3, 256, 156, 148
+	offsets: 1, 1, 158, 150
+ShopKeeper/Torso
+	bounds: 3, 407, 354, 244
+	offsets: 1, 1, 356, 246

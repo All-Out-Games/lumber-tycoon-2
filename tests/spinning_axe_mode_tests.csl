@@ -1,0 +1,7 @@
+test_spinning_axe_mode_defaults_to_tam :: proc() {
+    Test.teleport({0, 0});
+    Test.wait_seconds(0.5);
+    Test.assert_var_bool("tam defaults on", "g_observed_spinning_axe_mode", true);
+    Test.assert_var_float("tier 1 spinning axe starts close", "g_observed_spinning_axe_radius", 0.65, 0.05);
+    Test.assert_var_float("tier 1 spinning axe has readable size", "g_observed_spinning_axe_visual_scale", 0.58, 0.02);
+}

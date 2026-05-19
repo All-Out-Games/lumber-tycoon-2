@@ -1,0 +1,51 @@
+b44beab6573528e9.png
+	size: 4096, 256
+	filter: Linear, Linear
+imposter/imposter/Shadow
+	bounds: 2042, 38, 501, 84
+imposter/imposter/back arm
+	bounds: 1464, 107, 143, 333
+	rotate: 90
+imposter/imposter/back_foot
+	bounds: 933, 10, 70, 59
+	rotate: 90
+imposter/imposter/back_lower leg
+	bounds: 1916, 128, 122, 296
+	rotate: 90
+imposter/imposter/back_upper_leg
+	bounds: 291, 38, 143, 212
+imposter/imposter/body
+	bounds: 440, 45, 325, 205
+imposter/imposter/front_foot
+	bounds: 998, 10, 70, 59
+	rotate: 90
+imposter/imposter/front_hand
+	bounds: 1063, 19, 63, 79
+	rotate: 90
+imposter/imposter/front_lower leg
+	bounds: 2218, 128, 122, 296
+	rotate: 90
+imposter/imposter/front_lower_Arm
+	bounds: 933, 86, 83, 164
+imposter/imposter/front_upper leg
+	bounds: 6, 8, 242, 163
+	rotate: 90
+imposter/imposter/front_upper_Arm
+	bounds: 175, 33, 110, 217
+imposter/imposter/head_Eating
+	bounds: 771, 55, 156, 195
+imposter/imposter/head_spitting
+	bounds: 1022, 88, 145, 162
+imposter/imposter/hed_nutroal
+	bounds: 1314, 104, 146, 144
+	rotate: 90
+imposter/spit/spit1
+	bounds: 1173, 100, 135, 150
+imposter/spit/spit2
+	bounds: 1823, 7, 110, 104
+imposter/spit/spit3
+	bounds: 1803, 117, 107, 133
+imposter/spit/spit4
+	bounds: 1939, 9, 97, 113
+imposter/wire/wire
+	bounds: 1173, 6, 644, 88

@@ -1,0 +1,26 @@
+e30fed1ab077c861.png
+	size: 1168, 1168
+	filter: Linear, Linear
+Capybara_heli
+	bounds: 6, 693, 916, 466
+Capybara_heli_gun_frame 1
+	bounds: 928, 868, 291, 229
+	rotate: 90
+Capybara_heli_shadow
+	bounds: 948, 202, 660, 207
+	rotate: 90
+Heli blade frame 1
+	bounds: 6, 16, 600, 330
+Heli blade frame 2
+	bounds: 612, 91, 596, 330
+	rotate: 90
+Heli blade frame 3
+	bounds: 6, 352, 600, 335
+Heli blade frame small
+	bounds: 948, 32, 164, 165
+	rotate: 90
+hit_effect1
+	bounds: 700, 39, 44, 46
+hit_effect2
+	bounds: 612, 6, 79, 82
+	rotate: 90

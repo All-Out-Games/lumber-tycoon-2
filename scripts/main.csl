@@ -1,0 +1,4664 @@
+import "core:ao"
+
+LOG_ITEM_ID :: "log";
+PLANK_ITEM_ID :: "plank";
+ALIEN_PLANK_ITEM_ID :: "alien_plank";
+GOLD_CURRENCY :: "Gold";
+GLOBAL_TOP_MESSAGE_SAVE_KEY :: "lta_global_top_message";
+SAVE_PROGRESS_VERSION :: 1;
+BACKPACK_UPGRADE_SFX :: "ui_backpack_f93299.wav";
+AXE_UPGRADE_SFX :: "sharpen_spoon_84f280.wav";
+SAWMILL_PROCESS_LOOP_SFX :: "conveyor_belt_loop_edc47f.wav";
+SAWMILL_PROCESS_LOOP_VOLUME :: 0.5;
+SAWMILL_PROCESS_LOOP_RANGE_MULTIPLIER :: 1.6;
+GAME_START_MUSIC :: "nighttime_ambience_d8d88b.wav";
+GAME_START_MUSIC_VOLUME :: 1.0;
+BACTERIA_TAG_SFX :: "touch_turns_scary_a2ea5f.wav";
+BACTERIA_AMBIENT_SFX :: "ambiance_03_be7492.wav";
+ALIEN_REFINER_FLAME_SPINE :: "012MIM_Dark_Flame_Pillar_c42600/012MIM_Dark_Flame_Pillar.spine";
+ALIEN_REFINER_FLAME_ANIM :: "012MIM/Dark_Flame_Pillar_Full";
+CHEST_RESPAWN_SECONDS :: 180.0;
+HELICOPTER_RENT_COST :: 22500;
+HELICOPTER_RENT_SECONDS :: 60.0;
+HELICOPTER_CLEAR_RADIUS :: 5.5;
+HELICOPTER_CLEAR_TICK :: 0.20;
+HELICOPTER_INVISIBILITY_REASON :: "helicopter_rental";
+HELICOPTER_RIDE_OFFSET :: v2{0.0, 0.32};
+HELICOPTER_AUTO_FLY_SPEED :: 4.5;
+HELICOPTER_AUTO_FLY_STOP_RADIUS :: 0.8;
+TREE_MONSTER_RENT_COST :: 80915;
+TREE_MONSTER_RENT_SECONDS :: 60.0;
+TREE_MONSTER_SMASH_RADIUS :: 4.75;
+TREE_MONSTER_SMASH_TICK :: 0.34;
+TREE_MONSTER_INVISIBILITY_REASON :: "tree_monster_rental";
+TREE_MONSTER_RIDE_OFFSET :: v2{0.0, -0.12};
+BACTERIA_CHASE_TRIGGER_RADIUS :: 10.0;
+BACTERIA_HIT_RADIUS :: 1.15;
+BACTERIA_MAX_CHASE_SECONDS :: 7.0;
+BACTERIA_CHASE_COOLDOWN_SECONDS :: 45.0;
+BACTERIA_PATROL_SPEED :: 2.15;
+BACTERIA_CHASE_SPEED :: 3.65;
+BACTERIA_PATROL_POINT_RADIUS :: 2.0;
+BACTERIA_TAG_FLASH_SECONDS :: 0.22;
+BACTERIA_AMBIENT_RANGE_MULTIPLIER :: 2.2;
+MAX_AXE_TIER :: 12;
+MAX_SAWMILL_TIER :: 8;
+MAX_BACKPACK_TIER :: 15;
+BASE_CHOP_RADIUS :: 2.8;
+SPINNING_AXE_MODE_DEFAULT :: true;
+SPINNING_AXE_SPEED :: 4.2;
+SPINNING_AXE_TREE_HIT_COOLDOWN :: 0.70;
+SPINNING_AXE_SWEEP_DOT :: 0.88;
+SPINNING_AXE_QUADRANT_DOT :: 0.707;
+SPINNING_AXE_BASE_ORBIT_RADIUS :: 0.65;
+SPINNING_AXE_MAX_ORBIT_RADIUS :: 3.65;
+RADIANS_TO_DEGREES :: 57.29578;
+SAWMILL_AUTO_ZONE_RADIUS :: 2.75;
+POLISHING_MACHINE_AUTO_ZONE_RADIUS :: 2.75;
+SELL_AUTO_ZONE_RADIUS :: 2.65;
+AUTO_ZONE_CHECK_SECONDS :: 0.25;
+ALIEN_REFINER_UNLOCK_COST :: 6000;
+TREE_REGROW_LOW_TIER_MIN_SECONDS :: 240.0;
+TREE_REGROW_LOW_TIER_MAX_SECONDS :: 300.0;
+TREE_REGROW_HIGH_TIER_MIN_SECONDS :: 20.0;
+TREE_REGROW_HIGH_TIER_MAX_SECONDS :: 45.0;
+BASE_TIER_TREE_MIN_ALIVE :: 50;
+BASE_TIER_TREE_SUPPLY_CHECK_SECONDS :: 2.0;
+TREE_HEALTH :: 6;
+MAX_TREE_LEVEL :: 5;
+INFINITE_BACKPACK_CAPACITY :: 1000000000;
+AUTO_SAWMILL_PRODUCT_ID :: "6a08faac014578603d2d145f";
+UNLIMITED_BACKPACK_PRODUCT_ID :: "6a0b73af8063e5a9ee3400fa";
+UNLIMITED_MOVE_SPEED_PRODUCT_ID :: "6a0b73b08063e5a9ee3400fb";
+MAX_AXE_SCREEN_SHAKE :: 0.123333;
+FOREST_CANOPY_QUERY_RADIUS :: 2.55;
+FOREST_CANOPY_BASE_RADIUS :: 0.75;
+FOREST_CANOPY_SCALE_RADIUS :: 0.55;
+FOREST_CANOPY_EDGE_WEIGHT :: 0.18;
+FOREST_SURROUNDED_COVER_SCORE :: 1.6;
+FOREST_DENSE_COVER_SCORE :: 9.0;
+FOREST_DISTANCE_SLOW_START :: 5.0;
+FOREST_DISTANCE_SLOW_FULL :: 26.25;
+FOREST_NEAR_MAX_SLOW :: 0.35;
+FOREST_FAR_MAX_SLOW :: 0.78;
+FOREST_NEAR_COVER_SPEED_CAP :: 0.78;
+FOREST_MIN_SPEED_MULTIPLIER :: 0.01;
+FOREST_AXE_TIER_MAX_SLOW_RELIEF :: 0.70;
+PLAYER_DEFAULT_MOVEMENT_SPEED :: 300.0;
+TREE_GRID_DIM :: 16;
+TREE_GRID_CELL_COUNT :: TREE_GRID_DIM * TREE_GRID_DIM;
+
+Tree_Grid_Entry :: struct {
+    trees: [..]Lumber_Tree;
+}
+
+log_defn: Item_Definition;
+plank_defn: Item_Definition;
+alien_plank_defn: Item_Definition;
+g_chop_successes: s64;
+g_observed_logs: s64;
+g_observed_planks: s64;
+g_observed_alien_planks: s64;
+g_observed_axe_tier: s64;
+g_observed_sawmill_tier: s64;
+g_observed_backpack_tier: s64;
+g_observed_backpack_capacity: s64;
+g_observed_show_upgrades_menu: bool;
+g_observed_refining: bool;
+g_observed_near_tree_count: s64;
+g_observed_axe_damage: s64;
+g_observed_axe_hits_to_chop: s64;
+g_observed_axe_radius: float;
+g_observed_sawmill_auto_time: float;
+g_observed_auto_product_id: string;
+g_observed_bottom_left_hud_height: float;
+g_observed_backpack_full_text_scale: float;
+g_observed_backpack_full_dud_sfx_ready: bool;
+g_observed_sawmill_progress: float;
+g_observed_forest_tree_count: s64;
+g_observed_forest_cover_score: float;
+g_observed_forest_slowed: bool;
+g_observed_forest_distance_factor: float;
+g_observed_forest_speed_multiplier: float;
+g_observed_axe_tier_1_hits: s64;
+g_observed_axe_tier_2_hits: s64;
+g_observed_axe_tier_3_hits: s64;
+g_observed_axe_tier_4_hits: s64;
+g_observed_axe_tier_4_cleave_targets: s64;
+g_observed_axe_tier_4_cleave_damage: s64;
+g_observed_axe_tier_5_cleave_targets: s64;
+g_observed_spinning_axe_mode: bool;
+g_observed_spinning_axe_radius: float;
+g_observed_spinning_axe_damage: s64;
+g_observed_spinning_axe_visual_scale: float;
+g_observed_spinning_axe_hits: s64;
+g_observed_near_auto_sawmill_zone: bool;
+g_observed_near_auto_sell_zone: bool;
+g_last_sell_payout: s64;
+g_game_start_music_active: bool;
+g_game_start_music_sound_id: u64;
+tree_spine_asset: Spine_Asset;
+tree_monster_spine_asset: Spine_Asset;
+chop_keybind: Keybind;
+tree_gold_material: Material;
+tree_diamond_material: Material;
+tree_rainbow_material: Material;
+tree_candy_material: Material;
+wood_chips_texture: Texture_Asset;
+wood_logs_texture: Texture_Asset;
+held_axe_texture: Texture_Asset;
+g_spinning_axe_mode: bool;
+g_floating_feedback: [..]Floating_Feedback;
+g_chip_vfx: [..]Chip_VFX;
+g_juice_particle_vfx: [..]Juice_Particle_VFX;
+g_log_pickup_lerps: [..]Log_Pickup_Lerp;
+g_world_feedback_draw_frame: u64;
+g_world_lumber_navmesh: Navmesh;
+g_world_lumber_navmesh_rebuild_requested: bool;
+g_base_tier_tree_supply_check_at: float;
+heli_spine_asset: Spine_Asset;
+alien_refiner_flame_spine_asset: Spine_Asset;
+g_alien_refiner_flame_entity: Entity;
+g_alien_refiner_flame_animator: Spine_Animator;
+g_alien_refiner_flame_active: bool;
+g_alien_refiner_flame_last_debug_at: float;
+g_alien_refiner_flame_ensure_count: s64;
+g_alien_refiner_flame_start_count: s64;
+g_alien_refiner_flame_stop_count: s64;
+g_tree_grid: [TREE_GRID_CELL_COUNT]Tree_Grid_Entry;
+g_tree_grid_ready: bool;
+g_tree_grid_dirty: bool;
+g_tree_grid_min: v2;
+g_tree_grid_max: v2;
+
+// Game wide systems
+ao_before_scene_load :: proc() {
+    g_spinning_axe_mode = SPINNING_AXE_MODE_DEFAULT;
+    Scene.set_player_inventory_capacity(24);
+    Scene.set_auto_save_player_inventory(true);
+
+    log_icon := get_asset(Texture_Asset, "Wood Logs Icon 256_e83b4b.png");
+    plank_icon := get_asset(Texture_Asset, "Wood_Plank_a3b582.png");
+    alien_plank_icon := get_asset(Texture_Asset, "upperarm_1r_8cf382.png");
+    coin_icon := get_asset(Texture_Asset, "$AO/ui/kit/Icons/coin/coin_icon_b.png");
+    tree_spine_asset = get_asset(Spine_Asset, "pine_tree_9f0a75/pine_tree.spine");
+    tree_monster_spine_asset = get_asset(Spine_Asset, "green_monster_f3be11/green_monster.spine");
+    heli_spine_asset = get_asset(Spine_Asset, "CAP99_capy_copter_e30fed/CAP99_capy_copter.spine");
+    alien_refiner_flame_spine_asset = get_asset(Spine_Asset, ALIEN_REFINER_FLAME_SPINE);
+    chop_keybind = Keybinds.register("Chop", .MOUSE_LEFT);
+    wood_chips_texture = get_asset(Texture_Asset, "wood_chips_331308.png");
+    wood_logs_texture = get_asset(Texture_Asset, "wood_logs_758caf.png");
+    held_axe_texture = get_asset(Texture_Asset, "Axe Icon_2c9119.png");
+
+    log_defn = Items.register_item_definition({LOG_ITEM_ID, "Logs", log_icon, 999, .COMMON});
+    plank_defn = Items.register_item_definition({PLANK_ITEM_ID, "Planks", plank_icon, 999, .UNCOMMON});
+    alien_plank_defn = Items.register_item_definition({ALIEN_PLANK_ITEM_ID, "Alien Planks", alien_plank_icon, 999, .RARE});
+    Economy.register_currency(GOLD_CURRENCY, coin_icon);
+    register_tree_level_materials();
+}
+
+ao_start :: proc() {
+    tree_grid_mark_dirty();
+}
+
+ao_update :: proc(dt: float) {
+    g_observed_backpack_full_text_scale = 2.0;
+    g_observed_backpack_full_dud_sfx_ready = true;
+    g_observed_axe_tier_1_hits = axe_hits_to_chop(1);
+    g_observed_axe_tier_2_hits = axe_hits_to_chop(2);
+    g_observed_axe_tier_3_hits = axe_hits_to_chop(3);
+    g_observed_axe_tier_4_hits = axe_hits_to_chop(4);
+    g_observed_axe_tier_4_cleave_targets = axe_cleave_targets(4);
+    g_observed_axe_tier_4_cleave_damage = axe_cleave_damage(4);
+    g_observed_axe_tier_5_cleave_targets = axe_cleave_targets(5);
+    maintain_base_tier_tree_supply();
+    update_world_space_feedback(dt);
+}
+
+ao_late_update :: proc(dt: float) {
+}
+
+tree_grid_mark_dirty :: proc() {
+    g_tree_grid_dirty = true;
+}
+
+tree_grid_flat_index :: proc(x: s64, y: s64) -> s64 {
+    return y * TREE_GRID_DIM + x;
+}
+
+tree_grid_cell_x :: proc(x: float) -> s64 {
+    span := g_tree_grid_max.x - g_tree_grid_min.x;
+    if span <= 0.01 return 0;
+    cell := (((x - g_tree_grid_min.x) / span) * TREE_GRID_DIM.(float)).(s64);
+    return clamp(cell, 0, TREE_GRID_DIM - 1);
+}
+
+tree_grid_cell_y :: proc(y: float) -> s64 {
+    span := g_tree_grid_max.y - g_tree_grid_min.y;
+    if span <= 0.01 return 0;
+    cell := (((y - g_tree_grid_min.y) / span) * TREE_GRID_DIM.(float)).(s64);
+    return clamp(cell, 0, TREE_GRID_DIM - 1);
+}
+
+tree_grid_clear :: proc() {
+    for i: 0..TREE_GRID_CELL_COUNT - 1 {
+        g_tree_grid[i].trees.clear();
+    }
+}
+
+tree_grid_rebuild :: proc() {
+    tree_grid_clear();
+    found := false;
+    min_pos := v2{0, 0};
+    max_pos := v2{0, 0};
+
+    for tree: component_iterator(Lumber_Tree) {
+        if tree == null continue;
+        if !#alive(tree.entity) continue;
+        pos := tree.entity.world_position;
+        if !found {
+            min_pos = pos;
+            max_pos = pos;
+            found = true;
+        } else {
+            min_pos.x = min(min_pos.x, pos.x);
+            min_pos.y = min(min_pos.y, pos.y);
+            max_pos.x = max(max_pos.x, pos.x);
+            max_pos.y = max(max_pos.y, pos.y);
+        }
+    }
+
+    if !found {
+        g_tree_grid_ready = false;
+        g_tree_grid_dirty = false;
+        return;
+    }
+
+    g_tree_grid_min = min_pos - v2{1.0, 1.0};
+    g_tree_grid_max = max_pos + v2{1.0, 1.0};
+    if g_tree_grid_max.x - g_tree_grid_min.x < 1.0 g_tree_grid_max.x = g_tree_grid_min.x + 1.0;
+    if g_tree_grid_max.y - g_tree_grid_min.y < 1.0 g_tree_grid_max.y = g_tree_grid_min.y + 1.0;
+
+    for tree: component_iterator(Lumber_Tree) {
+        if tree == null continue;
+        if !#alive(tree.entity) continue;
+        x := tree_grid_cell_x(tree.entity.world_position.x);
+        y := tree_grid_cell_y(tree.entity.world_position.y);
+        g_tree_grid[tree_grid_flat_index(x, y)].trees.append(tree);
+    }
+
+    g_tree_grid_ready = true;
+    g_tree_grid_dirty = false;
+}
+
+tree_grid_ensure :: proc() {
+    if g_tree_grid_dirty || !g_tree_grid_ready {
+        tree_grid_rebuild();
+    }
+}
+
+maintain_base_tier_tree_supply :: proc() {
+    if !Game.is_server() return;
+
+    now := get_time();
+    if now < g_base_tier_tree_supply_check_at return;
+    g_base_tier_tree_supply_check_at = now + BASE_TIER_TREE_SUPPLY_CHECK_SECONDS;
+
+    alive_base_trees: s64 = 0;
+    for tree: component_iterator(Lumber_Tree) {
+        if tree == null continue;
+        if tree.tree_level != 1 continue;
+        if !tree.is_cut && !tree.is_falling {
+            alive_base_trees += 1;
+        }
+    }
+
+    trees_to_respawn := BASE_TIER_TREE_MIN_ALIVE - alive_base_trees;
+    if trees_to_respawn <= 0 return;
+
+    for tree: component_iterator(Lumber_Tree) {
+        if trees_to_respawn <= 0 break;
+        if tree == null continue;
+        if tree.tree_level != 1 continue;
+        if tree.is_cut {
+            tree.force_respawn();
+            trees_to_respawn -= 1;
+        }
+    }
+}
+
+query_trees_near :: proc(pos: v2, radius: float, results: ref [..]Lumber_Tree) {
+    results.clear();
+    tree_grid_ensure();
+    if !g_tree_grid_ready return;
+
+    min_x := tree_grid_cell_x(pos.x - radius);
+    max_x := tree_grid_cell_x(pos.x + radius);
+    min_y := tree_grid_cell_y(pos.y - radius);
+    max_y := tree_grid_cell_y(pos.y + radius);
+
+    for y: min_y..max_y {
+        for x: min_x..max_x {
+            entry_index := tree_grid_flat_index(x, y);
+            for tree: g_tree_grid[entry_index].trees {
+                results.append(tree);
+            }
+        }
+    }
+}
+
+bool_to_save_int :: proc(value: bool) -> s64 {
+    if value return 1;
+    return 0;
+}
+
+player_has_auto_sawmill :: proc(player: Player) -> bool {
+    if player == null return false;
+    return player.owns_auto_sawmill;
+}
+
+player_has_unlimited_backpack :: proc(player: Player) -> bool {
+    if player == null return false;
+    return player.owns_unlimited_backpack_product;
+}
+
+player_has_unlimited_move_speed :: proc(player: Player) -> bool {
+    if player == null return false;
+    return player.owns_unlimited_move_speed_product;
+}
+
+player_has_alien_refiner :: proc(player: Player) -> bool {
+    if player == null return false;
+    return player.alien_refiner_unlocked;
+}
+
+save_player_progress :: proc(player: Player) {
+    if player == null return;
+    Save.set_int(player, "lta_progress_version", SAVE_PROGRESS_VERSION);
+    Save.set_int(player, "lta_axe_tier", clamp(player.axe_tier, 1, MAX_AXE_TIER));
+    Save.set_int(player, "lta_backpack_tier", clamp(player.backpack_tier, 1, MAX_BACKPACK_TIER));
+    Save.set_int(player, "lta_sawmill_tier", clamp(player.sawmill_tier, 1, MAX_SAWMILL_TIER));
+    Save.set_int(player, "lta_has_sold_planks", bool_to_save_int(player.has_sold_planks));
+    Save.set_int(player, "lta_onboarding_step", clamp(player.onboarding_step, 0, 3));
+    Save.set_int(player, "lta_infinite_backpack", bool_to_save_int(player.infinite_backpack));
+    Save.set_int(player, "lta_auto_sawmill", bool_to_save_int(player.owns_auto_sawmill));
+    Save.set_int(player, "lta_unlimited_backpack", bool_to_save_int(player.owns_unlimited_backpack_product));
+    Save.set_int(player, "lta_unlimited_move_speed", bool_to_save_int(player.owns_unlimited_move_speed_product));
+    Save.set_int(player, "lta_alien_refiner_unlocked", bool_to_save_int(player.alien_refiner_unlocked));
+}
+
+load_player_progress :: proc(player: Player) {
+    if player == null return;
+
+    save_version := Save.get_int(player, "lta_progress_version", 0);
+    if save_version < SAVE_PROGRESS_VERSION {
+        save_version = SAVE_PROGRESS_VERSION;
+    }
+    Save.set_int(player, "lta_progress_version", save_version);
+
+    player.axe_tier = clamp(Save.get_int(player, "lta_axe_tier", max(1, player.axe_tier)), 1, MAX_AXE_TIER);
+    player.backpack_tier = clamp(Save.get_int(player, "lta_backpack_tier", max(1, player.backpack_tier)), 1, MAX_BACKPACK_TIER);
+    player.sawmill_tier = clamp(Save.get_int(player, "lta_sawmill_tier", max(1, player.sawmill_tier)), 1, MAX_SAWMILL_TIER);
+    player.has_sold_planks = Save.get_int(player, "lta_has_sold_planks", bool_to_save_int(player.has_sold_planks)) != 0;
+    player.onboarding_step = clamp(Save.get_int(player, "lta_onboarding_step", player.onboarding_step), 0, 3);
+    player.infinite_backpack = Save.get_int(player, "lta_infinite_backpack", bool_to_save_int(player.infinite_backpack)) != 0;
+    player.owns_auto_sawmill = Save.get_int(player, "lta_auto_sawmill", 0) != 0;
+    player.owns_unlimited_backpack_product = Save.get_int(player, "lta_unlimited_backpack", 0) != 0;
+    player.owns_unlimited_move_speed_product = Save.get_int(player, "lta_unlimited_move_speed", 0) != 0;
+    player.alien_refiner_unlocked = Save.get_int(player, "lta_alien_refiner_unlocked", 0) != 0;
+
+    save_player_progress(player);
+}
+
+get_world_lumber_navmesh :: proc() -> Navmesh {
+    if g_world_lumber_navmesh != null return g_world_lumber_navmesh;
+
+    world := Scene.get_entity_by_name("WORLD_Lumber_Tycoon");
+    if world != null {
+        g_world_lumber_navmesh = world.get_component(Navmesh);
+    }
+
+    if g_world_lumber_navmesh == null {
+        for navmesh: component_iterator(Navmesh) {
+            if navmesh.entity.compare_name("WORLD_Lumber_Tycoon") {
+                g_world_lumber_navmesh = navmesh;
+                break;
+            }
+            if g_world_lumber_navmesh == null {
+                g_world_lumber_navmesh = navmesh;
+            }
+        }
+    }
+
+    if g_world_lumber_navmesh != null && !g_world_lumber_navmesh_rebuild_requested {
+        g_world_lumber_navmesh.mark_for_rebuild();
+        g_world_lumber_navmesh_rebuild_requested = true;
+    }
+    return g_world_lumber_navmesh;
+}
+
+lock_player_to_world_navmesh :: proc(player: Player) -> bool {
+    if player == null || player.agent == null return false;
+
+    navmesh := get_world_lumber_navmesh();
+    if navmesh == null return false;
+
+    player.agent.set_navmesh_to_lock_to(navmesh);
+    return true;
+}
+
+ao_purchase_handler :: proc(player: Player, id: string) -> bool {
+    if player == null return false;
+
+    if id == UNLIMITED_BACKPACK_PRODUCT_ID {
+        player.owns_unlimited_backpack_product = true;
+        player.infinite_backpack = true;
+        player.dialogue_text = "Infinite backpack";
+        player.dialogue_timer = 1.8;
+        spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Infinite backpack", {0.62, 0.88, 1.0, 1}, true);
+        spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, 6, 18, {0.62, 0.88, 1.0, 0.8}, true);
+        play_purchase_item_sfx(player);
+        save_player_progress(player);
+        return true;
+    }
+
+    if id == UNLIMITED_MOVE_SPEED_PRODUCT_ID {
+        player.owns_unlimited_move_speed_product = true;
+        if player.agent != null {
+            player.agent.movement_speed = PLAYER_DEFAULT_MOVEMENT_SPEED * 1.2;
+        }
+        player.dialogue_text = "Speed unlocked";
+        player.dialogue_timer = 1.8;
+        spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Speed unlocked", {0.45, 1.0, 0.45, 1}, true);
+        spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, 6, 18, {0.45, 1.0, 0.45, 0.8}, true);
+        play_purchase_item_sfx(player);
+        save_player_progress(player);
+        return true;
+    }
+
+    if id == AUTO_SAWMILL_PRODUCT_ID {
+        player.owns_auto_sawmill = true;
+        player.auto_refine_timer = 0.0;
+        player.dialogue_text = "Auto sawmill";
+        player.dialogue_timer = 1.8;
+        spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Auto sawmill", {1.0, 0.78, 0.22, 1}, true);
+        spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, 6, 18, {1.0, 0.78, 0.22, 0.8}, true);
+        play_purchase_item_sfx(player);
+        save_player_progress(player);
+        return true;
+    }
+
+    return false;
+}
+
+player_inventory_ready :: proc(player: Player) -> bool {
+    if player == null return false;
+    if !#alive(player) return false;
+    if player.default_inventory == null return false;
+    if !#alive(player.default_inventory) return false;
+    if player.default_inventory.capacity <= 0 return false;
+    return true;
+}
+
+count_item :: proc(player: Player, defn: Item_Definition) -> s64 {
+    total: s64 = 0;
+    if defn == null return total;
+    if player_inventory_ready(player) {
+        inventory := player.default_inventory;
+        for i: 0..inventory.capacity - 1 {
+            item := inventory.get_item(i);
+            if item == null continue;
+            if !#alive(item) continue;
+            item_defn := item.get_definition();
+            if item_defn == defn {
+                total += item.quantity;
+            }
+        }
+    }
+    return total;
+}
+
+give_item :: proc(player: Player, defn: Item_Definition, amount: s64) -> s64 {
+    if defn == null || amount <= 0 {
+        return 0;
+    }
+    if !player_inventory_ready(player) {
+        return 0;
+    }
+    item := Items.create_item_instance(defn, amount);
+    if item == null return 0;
+    destroyed: bool;
+    moved := Items.move_as_many_items_as_possible_to_inventory(item, player.default_inventory, ref destroyed);
+    if moved < amount && !destroyed && #alive(item) {
+        Items.destroy_item_instance(item);
+    }
+    return moved;
+}
+
+backpack_capacity :: proc(tier: s64) -> s64 {
+    switch clamp(tier, 1, MAX_BACKPACK_TIER) {
+        case 1: return 8;
+        case 2: return 17;
+        case 3: return 34;
+        case 4: return 63;
+        case 5: return 112;
+        case 6: return 182;
+        case 7: return 294;
+        case 8: return 462;
+        case 9: return 700;
+        case 10: return 938;
+        case 11: return 1260;
+        case 12: return 1680;
+        case 13: return 2240;
+        case 14: return 3010;
+        default: return 4200;
+    }
+}
+
+effective_backpack_capacity :: proc(player: Player) -> s64 {
+    if player_has_unlimited_backpack(player) return INFINITE_BACKPACK_CAPACITY;
+    if player != null && player.infinite_backpack return INFINITE_BACKPACK_CAPACITY;
+    if player == null return backpack_capacity(1);
+    return backpack_capacity(player.backpack_tier);
+}
+
+backpack_upgrade_cost :: proc(tier: s64) -> s64 {
+    cost := (35 + tier * tier * 55) * 2;
+    if tier <= 1 return max(1, cost / 2);
+    return cost;
+}
+
+give_logs_to_backpack :: proc(player: Player, amount: s64) -> s64 {
+    if player == null || amount <= 0 return 0;
+    carried := count_item(player, log_defn);
+    room := effective_backpack_capacity(player) - carried;
+    if room <= 0 return 0;
+    return give_item(player, log_defn, min(amount, room));
+}
+
+remove_item_count :: proc(player: Player, defn: Item_Definition, amount: s64) -> s64 {
+    if defn == null || amount <= 0 return 0;
+    remaining := amount;
+    removed: s64 = 0;
+    if !player_inventory_ready(player) return 0;
+    inventory := player.default_inventory;
+    for i: 0..inventory.capacity - 1 {
+        if remaining <= 0 break;
+        item := inventory.get_item(i);
+        if item == null continue;
+        if !#alive(item) continue;
+        if item.get_definition() != defn continue;
+        take := min(item.quantity, remaining);
+        Items.destroy_item_instance(item, take);
+        remaining -= take;
+        removed += take;
+    }
+    return removed;
+}
+
+axe_upgrade_cost :: proc(tier: s64) -> s64 {
+    cost := (25 + tier * tier * 35) * 2;
+    if tier <= 1 {
+        current_cost := ((cost / 2) * 5 + 3) / 4;
+        return max(1, (current_cost * 23 + 19) / 20);
+    }
+    current_cost := (cost * 5 + 3) / 4;
+    return (current_cost * 23 + 19) / 20;
+}
+
+axe_chop_radius :: proc(tier: s64) -> float {
+    if tier <= 2 return BASE_CHOP_RADIUS * 1.15;
+    return (BASE_CHOP_RADIUS + max(0, tier - 2).(float) * 0.75) * 1.15;
+}
+
+axe_damage :: proc(tier: s64) -> s64 {
+    if tier <= 1 return 1;
+    clamped_tier := clamp(tier, 1, MAX_AXE_TIER);
+    max_tree_health := TREE_HEALTH * tree_level_health_multiplier(MAX_TREE_LEVEL);
+    max_damage := max(1, max_tree_health / 12);
+    damage_scale := (max_damage - 1).(float) * 0.85;
+    if clamped_tier >= MAX_AXE_TIER return max(1, (1.0 + damage_scale).(s64));
+
+    t := (clamped_tier - 1).(float) / (MAX_AXE_TIER - 1).(float);
+    scaled := 1.0 + pow(t, 2.0) * damage_scale;
+    return max(1, scaled.(s64));
+}
+
+axe_crit_chance :: proc(tier: s64) -> float {
+    t := 0.0;
+    if MAX_AXE_TIER > 1 {
+        t = clamp((clamp(tier, 1, MAX_AXE_TIER) - 1).(float) / (MAX_AXE_TIER - 1).(float), 0.0, 1.0);
+    }
+    return lerp(0.05, 0.20, t);
+}
+
+roll_axe_crit :: proc(player: Player, tree: Lumber_Tree) -> bool {
+    if player == null || tree == null return false;
+    rng := rng_root_seed() + player.entity.id * 977 + tree.entity.id * 131 + player.processed_chop_request.(u64) * 3571;
+    return rng_range_float(ref rng, 0.0, 1.0) <= axe_crit_chance(player.axe_tier);
+}
+
+axe_cleave_targets :: proc(tier: s64) -> s64 {
+    return max(0, tier - 3);
+}
+
+axe_cleave_damage :: proc(tier: s64) -> s64 {
+    if tier < 4 return 0;
+    return max(1, axe_damage(tier) / 2);
+}
+
+axe_hits_to_chop :: proc(tier: s64) -> s64 {
+    dmg := axe_damage(tier);
+    if dmg <= 0 return TREE_HEALTH;
+    return max(1, (TREE_HEALTH + dmg - 1) / dmg);
+}
+
+axe_cooldown :: proc(tier: s64) -> float {
+    return max(0.28, 0.95 - tier.(float) * 0.08);
+}
+
+axe_screen_shake :: proc(tier: s64) -> float {
+    min_shake := MAX_AXE_SCREEN_SHAKE * 0.2;
+    t := 0.0;
+    if MAX_AXE_TIER > 1 {
+        t = clamp((max(1, tier) - 1).(float) / (MAX_AXE_TIER - 1).(float), 0.0, 1.0);
+    }
+    return lerp(min_shake, MAX_AXE_SCREEN_SHAKE, t);
+}
+
+spinning_axe_mode_enabled :: proc() -> bool {
+    return g_spinning_axe_mode;
+}
+
+spinning_axe_tier_t :: proc(tier: s64) -> float {
+    if MAX_AXE_TIER <= 1 return 0.0;
+    return clamp((clamp(tier, 1, MAX_AXE_TIER) - 1).(float) / (MAX_AXE_TIER - 1).(float), 0.0, 1.0);
+}
+
+spinning_axe_visual_scale :: proc(tier: s64) -> float {
+    return lerp(0.58, 1.95, spinning_axe_tier_t(tier));
+}
+
+spinning_axe_orbit_radius :: proc(tier: s64) -> float {
+    return lerp(SPINNING_AXE_BASE_ORBIT_RADIUS, SPINNING_AXE_MAX_ORBIT_RADIUS, spinning_axe_tier_t(tier));
+}
+
+spinning_axe_contact_radius :: proc(tier: s64) -> float {
+    return 0.34 + spinning_axe_visual_scale(tier) * 0.32;
+}
+
+spinning_axe_hit_cooldown :: proc(tier: s64) -> float {
+    return max(0.34, min(SPINNING_AXE_TREE_HIT_COOLDOWN, axe_cooldown(tier) * 0.90));
+}
+
+spinning_axe_tree_collision_radius :: proc(tree: Lumber_Tree) -> float {
+    if tree == null return 0.45;
+    scale := max(abs(tree.entity.local_scale.x), abs(tree.entity.local_scale.y));
+    return 0.45 + scale * 0.26;
+}
+
+axe_visual_opacity :: proc(player: Player) -> float {
+    if player != null && player.is_local() return 1.0;
+    return 0.1;
+}
+
+tree_regrow_seconds_for_axe :: proc(axe_tier: s64, rng: ref u64) -> float {
+    t := 0.0;
+    if MAX_AXE_TIER > 1 {
+        t = clamp((clamp(axe_tier, 1, MAX_AXE_TIER) - 1).(float) / (MAX_AXE_TIER - 1).(float), 0.0, 1.0);
+    }
+    min_seconds := lerp(TREE_REGROW_LOW_TIER_MIN_SECONDS, TREE_REGROW_HIGH_TIER_MIN_SECONDS, t);
+    max_seconds := lerp(TREE_REGROW_LOW_TIER_MAX_SECONDS, TREE_REGROW_HIGH_TIER_MAX_SECONDS, t);
+    return rng_range_float(ref rng, min_seconds, max_seconds);
+}
+
+sawmill_upgrade_cost :: proc(tier: s64) -> s64 {
+    cost := (45 + tier * tier * 45) * 2;
+    if tier <= 1 return max(1, cost / 2);
+    return cost;
+}
+
+can_afford_any_upgrade :: proc(player: Player) -> bool {
+    if player == null return false;
+    gold := Economy.get_balance(player, GOLD_CURRENCY);
+    if player.axe_tier < MAX_AXE_TIER && gold >= axe_upgrade_cost(player.axe_tier) return true;
+    if player.backpack_tier < MAX_BACKPACK_TIER && gold >= backpack_upgrade_cost(player.backpack_tier) return true;
+    if player.sawmill_tier < MAX_SAWMILL_TIER && gold >= sawmill_upgrade_cost(player.sawmill_tier) return true;
+    return false;
+}
+
+cheapest_next_upgrade_cost :: proc(player: Player) -> s64 {
+    if player == null return 0;
+    best: s64 = 0;
+    if player.axe_tier < MAX_AXE_TIER {
+        best = axe_upgrade_cost(player.axe_tier);
+    }
+    if player.backpack_tier < MAX_BACKPACK_TIER {
+        cost := backpack_upgrade_cost(player.backpack_tier);
+        if best == 0 || cost < best best = cost;
+    }
+    if player.sawmill_tier < MAX_SAWMILL_TIER {
+        cost := sawmill_upgrade_cost(player.sawmill_tier);
+        if best == 0 || cost < best best = cost;
+    }
+    return best;
+}
+
+sawmill_process_time :: proc(tier: s64) -> float {
+    tier_t := 0.0;
+    if MAX_SAWMILL_TIER > 1 {
+        tier_t = clamp((clamp(tier, 1, MAX_SAWMILL_TIER) - 1).(float) / (MAX_SAWMILL_TIER - 1).(float), 0.0, 1.0);
+    }
+    return (lerp(1.45, 0.0375, tier_t) * 2.0) / 1.69;
+}
+
+sawmill_auto_process_time :: proc(tier: s64) -> float {
+    return sawmill_process_time(tier) * 1.25;
+}
+
+polishing_process_time :: proc(tier: s64) -> float {
+    return sawmill_process_time(tier) * 4.0;
+}
+
+axe_tier_color :: proc(tier: s64) -> v4 {
+    switch tier {
+        case 1: return {0.82, 0.62, 0.38, 1};
+        case 2: return {0.80, 0.85, 0.92, 1};
+        case 3: return {0.35, 0.95, 0.48, 1};
+        case 4: return {0.28, 0.62, 1.0, 1};
+        case 5: return {0.82, 0.35, 1.0, 1};
+        default: return {1.0, 0.88, 0.18, 1};
+    }
+}
+
+axe_tier_name :: proc(tier: s64) -> string {
+    switch tier {
+        case 1: return "Bronze";
+        case 2: return "Iron";
+        case 3: return "Emerald";
+        case 4: return "Sapphire";
+        case 5: return "Mythic";
+        default: return "Golden";
+    }
+}
+
+spawn_float_text :: proc(pos: v2, text: string, color: v4, big: bool) {
+    spawn_float_text_scaled_feedback(pos, text, color, big, 1.0);
+}
+
+spawn_float_text_scaled_feedback :: proc(pos: v2, text: string, color: v4, big: bool, text_scale: float) {
+    spawn_float_text_scaled_feedback_for_player(null, pos, text, color, big, text_scale);
+}
+
+spawn_float_text_for_player :: proc(owner: Player, pos: v2, text: string, color: v4, big: bool) {
+    spawn_float_text_scaled_feedback_for_player(owner, pos, text, color, big, 1.0);
+}
+
+spawn_float_text_scaled_feedback_for_player :: proc(owner: Player, pos: v2, text: string, color: v4, big: bool, text_scale: float) {
+    if g_floating_feedback.count >= 80 {
+        g_floating_feedback.unordered_remove_by_index(0);
+    }
+    f: Floating_Feedback;
+    f.owner = owner;
+    f.text = text;
+    f.color = color;
+    f.duration = 1.05;
+    f.big = big;
+    f.text_scale = max(0.1, text_scale);
+    f.start_pos = pos;
+    rng := rng_root_seed() + get_frame_number() + g_floating_feedback.count.(u64);
+    f.drift_x = rng_range_float(ref rng, -0.8, 0.8);
+    g_floating_feedback.append(f);
+}
+
+spawn_chip :: proc(pos: v2, tier: s64) {
+    spawn_chip_for_player(null, pos, tier);
+}
+
+spawn_chip_for_player :: proc(owner: Player, pos: v2, tier: s64) {
+    for i: 0..2 + tier {
+        if g_chip_vfx.count >= 120 {
+            g_chip_vfx.unordered_remove_by_index(0);
+        }
+        c: Chip_VFX;
+        c.owner = owner;
+        c.pos = pos;
+        rng := rng_root_seed() + get_frame_number() + g_chip_vfx.count.(u64) + i.(u64);
+        c.velocity = v2{rng_range_float(ref rng, -2.4, 2.4), rng_range_float(ref rng, 1.2, 3.3)};
+        c.spin = rng_range_float(ref rng, -280.0, 280.0);
+        c.duration = rng_range_float(ref rng, 0.45, 0.75);
+        c.scale = rng_range_float(ref rng, 0.25, 0.5) + tier.(float) * 0.03;
+        g_chip_vfx.append(c);
+    }
+}
+
+spawn_juice_particles :: proc(pos: v2, tier: s64, count: s64, color: v4, sparkle: bool) {
+    spawn_juice_particles_for_player(null, pos, tier, count, color, sparkle);
+}
+
+spawn_juice_particles_for_player :: proc(owner: Player, pos: v2, tier: s64, count: s64, color: v4, sparkle: bool) {
+    for i: 0..count - 1 {
+        if g_juice_particle_vfx.count >= 180 {
+            g_juice_particle_vfx.unordered_remove_by_index(0);
+        }
+        j: Juice_Particle_VFX;
+        j.owner = owner;
+        rng := rng_root_seed() + get_frame_number() + g_juice_particle_vfx.count.(u64) + i.(u64);
+        j.pos = pos + v2{rng_range_float(ref rng, -0.28, 0.28), rng_range_float(ref rng, -0.12, 0.25)};
+        j.velocity = v2{rng_range_float(ref rng, -1.8, 1.8), rng_range_float(ref rng, 0.35, 2.6)};
+        j.spin = rng_range_float(ref rng, -220.0, 220.0);
+        j.duration = rng_range_float(ref rng, 0.45, 0.95);
+        j.start_color = color;
+        j.gravity = rng_range_float(ref rng, 0.8, 2.7);
+        j.scale = rng_range_float(ref rng, 0.08, 0.18) + tier.(float) * 0.015;
+        if sparkle j.scale *= 0.65;
+        g_juice_particle_vfx.append(j);
+    }
+}
+
+should_draw_feedback_owner :: proc(owner: Player) -> bool {
+    if owner == null return true;
+    if !#alive(owner) return false;
+    if !#alive(owner.entity) return false;
+    return owner.is_local();
+}
+
+play_positional_sfx :: proc(asset_path: string, pos: v2, volume: float, perturb: float) {
+    asset := get_asset(SFX_Asset, asset_path);
+    desc := SFX.default_sfx_desc();
+    desc.set_position(pos);
+    desc.volume = volume;
+    desc.speed_perturb = perturb;
+    SFX.play(asset, desc);
+}
+
+play_positional_sfx_speed :: proc(asset_path: string, pos: v2, volume: float, speed: float, perturb: float) {
+    asset := get_asset(SFX_Asset, asset_path);
+    desc := SFX.default_sfx_desc();
+    desc.set_position(pos);
+    desc.volume = volume;
+    desc.speed = speed;
+    desc.speed_perturb = perturb;
+    SFX.play(asset, desc);
+}
+
+player_local_feedback :: proc(player: Player) -> bool {
+    if player == null return false;
+    if !#alive(player) return false;
+    if !#alive(player.entity) return false;
+    return player.is_local();
+}
+
+player_ready_for_ui :: proc(player: Player) -> bool {
+    if player == null return false;
+    if !#alive(player) return false;
+    if !#alive(player.entity) return false;
+    return true;
+}
+
+player_helicopter_rented :: proc(player: Player) -> bool {
+    if !player_ready_for_ui(player) return false;
+    if player.helicopter_rental == null return false;
+    if !#alive(player.helicopter_rental) return false;
+    return player.helicopter_rental.is_rented();
+}
+
+player_tree_monster_rented :: proc(player: Player) -> bool {
+    if !player_ready_for_ui(player) return false;
+    if player.tree_monster_rental == null return false;
+    if !#alive(player.tree_monster_rental) return false;
+    return player.tree_monster_rental.is_rented();
+}
+
+play_sawmill_start_sfx :: proc(pos: v2) {
+    play_positional_sfx("saw_loop_606dff.wav", pos, 0.11, 0.025);
+}
+
+play_sawmill_log_queue_sfx :: proc(pos: v2) {
+    play_positional_sfx("cm_released_a2fcaa.wav", pos, 0.35, 0.02);
+}
+
+play_sawmill_plank_sfx :: proc(pos: v2) {
+    play_positional_sfx("cm_chopped_board_894334.wav", pos, 0.15, 0.04);
+}
+
+play_polishing_start_sfx :: proc(pos: v2) {
+    play_positional_sfx("$AO/sfx/FUI Holo Mechanism Activate.wav", pos, 0.24, 0.04);
+}
+
+play_polishing_finish_sfx :: proc(pos: v2) {
+    play_positional_sfx("cm_released_a2fcaa.wav", pos, 0.28, 0.03);
+}
+
+play_sawmill_passive_sfx :: proc(pos: v2) {
+    play_positional_sfx("saw_loop_606dff.wav", pos, 0.07, 0.015);
+}
+
+play_backpack_full_dud_sfx :: proc(pos: v2) {
+    play_positional_sfx("ui_error_eabd87.wav", pos, 0.20, 0.02);
+}
+
+play_ui_sfx :: proc(asset_path: string, volume: float, perturb: float) {
+    asset := get_asset(SFX_Asset, asset_path);
+    desc := SFX.default_sfx_desc();
+    desc.volume = volume;
+    desc.speed_perturb = perturb;
+    SFX.play(asset, desc);
+}
+
+play_upgrade_menu_open_sfx :: proc(player: Player) {
+    if player == null || !player.is_local() return;
+    play_ui_sfx("click_6d65ee.wav", 0.32, 0.02);
+    play_ui_sfx("$AO/sfx/FUI Holo Mechanism Activate.wav", 0.26, 0.035);
+}
+
+play_purchase_item_sfx :: proc(player: Player) {
+    if player == null || !player.is_local() return;
+    play_ui_sfx("$AO/sfx/FUI Holo Mechanism Activate.wav", 0.28, 0.06);
+    play_ui_sfx("cm_chopped_board_894334.wav", 0.11, 0.04);
+}
+
+play_upgrade_sfx :: proc(player: Player, asset_path: string) {
+    if player == null || !player.is_local() return;
+    play_ui_sfx(asset_path, 0.42, 0.04);
+}
+
+play_bacteria_tag_sfx :: proc(player: Player) {
+    if player == null || !player.is_local() return;
+
+    asset := get_asset(SFX_Asset, BACTERIA_TAG_SFX);
+    desc := SFX.default_sfx_desc();
+    desc.local_only = true;
+    desc.volume = 0.72;
+    desc.speed_perturb = 0.035;
+    SFX.play(asset, desc);
+}
+
+start_sawmill_processing_loop :: proc(player: Player, sawmill_entity: Entity, timeout: float) {
+    if player == null || !player.is_local() return;
+    if player.sawmill_processing_loop_active return;
+    player.sawmill_processing_loop_active = true;
+
+    asset := get_asset(SFX_Asset, SAWMILL_PROCESS_LOOP_SFX);
+    desc := SFX.default_sfx_desc();
+    desc.local_only = true;
+    if #alive(sawmill_entity) {
+        desc.entity_to_follow = sawmill_entity.id;
+    }
+    desc.loop = true;
+    desc.loop_timeout = max(0.25, timeout);
+    desc.volume = SAWMILL_PROCESS_LOOP_VOLUME;
+    desc.range_multiplier = SAWMILL_PROCESS_LOOP_RANGE_MULTIPLIER;
+    player.sawmill_processing_sound_id = SFX.play(asset, desc);
+}
+
+stop_sawmill_processing_loop :: proc(player: Player) {
+    if player == null || !player.is_local() return;
+    if !player.sawmill_processing_loop_active && player.sawmill_processing_sound_id == 0 return;
+    if player.sawmill_processing_sound_id != 0 {
+        SFX.stop(player.sawmill_processing_sound_id);
+    }
+    player.sawmill_processing_sound_id = 0;
+    player.sawmill_processing_loop_active = false;
+}
+
+start_polishing_processing_loop :: proc(player: Player, polisher_entity: Entity, timeout: float) {
+    if player == null || !player.is_local() return;
+    if player.polishing_processing_loop_active return;
+    player.polishing_processing_loop_active = true;
+
+    asset := get_asset(SFX_Asset, SAWMILL_PROCESS_LOOP_SFX);
+    desc := SFX.default_sfx_desc();
+    desc.local_only = true;
+    if #alive(polisher_entity) {
+        desc.entity_to_follow = polisher_entity.id;
+    }
+    desc.loop = true;
+    desc.loop_timeout = max(0.25, timeout);
+    desc.volume = SAWMILL_PROCESS_LOOP_VOLUME * 0.82;
+    desc.range_multiplier = SAWMILL_PROCESS_LOOP_RANGE_MULTIPLIER;
+    player.polishing_processing_sound_id = SFX.play(asset, desc);
+}
+
+stop_polishing_processing_loop :: proc(player: Player) {
+    if player == null || !player.is_local() return;
+    if !player.polishing_processing_loop_active && player.polishing_processing_sound_id == 0 return;
+    if player.polishing_processing_sound_id != 0 {
+        SFX.stop(player.polishing_processing_sound_id);
+    }
+    player.polishing_processing_sound_id = 0;
+    player.polishing_processing_loop_active = false;
+}
+
+play_sell_planks_sfx :: proc(pos: v2) {
+    play_positional_sfx("collect_coins_06b7d8.wav", pos, 0.42, 0.08);
+}
+
+play_sell_planks_sfx_for_player :: proc(player: Player, pos: v2) {
+    if !player_local_feedback(player) return;
+    asset := get_asset(SFX_Asset, "collect_coins_06b7d8.wav");
+    desc := SFX.default_sfx_desc();
+    desc.local_only = true;
+    desc.set_position(pos);
+    desc.volume = 0.42;
+    desc.speed_perturb = 0.08;
+    SFX.play(asset, desc);
+}
+
+play_coin_chest_sfx :: proc(pos: v2) {
+    play_positional_sfx("collect_coins_06b7d8.wav", pos, 0.62, 0.10);
+    play_positional_sfx("$AO/sfx/FUI Hologram Ping Tone Echoed.wav", pos, 0.18, 0.04);
+}
+
+play_helicopter_rent_sfx :: proc(pos: v2) {
+    play_positional_sfx("$AO/sfx/FUI Holo Mechanism Activate.wav", pos, 0.42, 0.05);
+    play_positional_sfx("saw_loop_606dff.wav", pos, 0.16, 0.04);
+}
+
+play_tree_monster_rent_sfx :: proc(pos: v2) {
+    play_positional_sfx("$AO/sfx/FUI Holo Mechanism Activate.wav", pos, 0.34, 0.04);
+    play_positional_sfx("cm_chop_wood_71e013.wav", pos, 0.18, 0.08);
+}
+
+play_tree_monster_smash_sfx :: proc(pos: v2, big: bool) {
+    volume := 0.26;
+    if big volume = 0.42;
+    play_positional_sfx_speed("wood_chop_1c256a.wav", pos, volume, 0.82, 0.10);
+    if big {
+        play_positional_sfx("cm_shake_tree_e69bfc.wav", pos, 0.20, 0.12);
+    }
+}
+
+apply_axe_cleave :: proc(player: Player, primary: Lumber_Tree) {
+    cleaves := axe_cleave_targets(player.axe_tier);
+    if cleaves <= 0 return;
+    radius := 2.45 + max(0, player.axe_tier - 4).(float) * 0.35;
+    radius_d2 := radius * radius;
+    frame := get_frame_number();
+    damage := axe_cleave_damage(player.axe_tier);
+    query_trees_near(primary.entity.world_position, radius, ref player.nearby_tree_cache);
+
+    for i: 0..cleaves - 1 {
+        best: Lumber_Tree = null;
+        best_d2 := radius_d2;
+        for tree: player.nearby_tree_cache {
+            if tree == primary continue;
+            if tree.is_cut || tree.is_falling continue;
+            if tree.target_frame == frame continue;
+            d2 := length_squared(tree.entity.world_position - primary.entity.world_position);
+            if d2 <= best_d2 {
+                best = tree;
+                best_d2 = d2;
+            }
+        }
+
+        if best == null return;
+        best.target_frame = frame;
+        best.start_chop_damage(player, 0.08 + i.(float) * 0.05, damage);
+    }
+}
+
+make_tree_shimmer_material :: proc(shimmer: Shader_Asset, noise_tex: Texture_Asset, shadow: v3, mid: v3, hi: v3, black_point: float, white_point: float, gamma: float, shadow_boost: float) -> Material {
+    if shimmer == null return null;
+    m := Material.create(shimmer);
+    if m == null return null;
+    if noise_tex != null m.set_texture("noise_texture", noise_tex);
+    m.set_float3("paletteShadow", shadow);
+    m.set_float3("paletteMid", mid);
+    m.set_float3("paletteHi", hi);
+    m.set_float("paletteBlackPoint", black_point);
+    m.set_float("paletteWhitePoint", white_point);
+    m.set_float("paletteGamma", gamma);
+    m.set_float("tintStrength", 1.00);
+    m.set_float("shadowBoost", shadow_boost);
+    m.set_float("outlineLow", 0.06);
+    m.set_float("outlineHigh", 0.12);
+    m.set_float("outlineDarken", 0.65);
+    m.set_float("outlineLumaMin", 0.00);
+    m.set_float("outlineLumaMax", 0.20);
+    return m;
+}
+
+register_tree_level_materials :: proc() {
+    noise_tex := get_asset(Texture_Asset, "noise.png");
+    shimmer := get_asset(Shader_Asset, "shaders/color_shimmer.aosl");
+
+    tree_gold_material = make_tree_shimmer_material(shimmer, noise_tex, v3{0.32, 0.21, 0.05}, v3{0.937, 0.749, 0.016}, v3{1.00, 0.92, 0.25}, 0.10, 0.90, 0.90, 0.40);
+    tree_diamond_material = make_tree_shimmer_material(shimmer, noise_tex, v3{0.03, 0.09, 0.45}, v3{0.30, 0.82, 1.00}, v3{0.75, 0.98, 1.00}, 0.08, 0.95, 0.80, 0.70);
+    tree_candy_material = make_tree_shimmer_material(shimmer, noise_tex, v3{0.55, 0.10, 0.30}, v3{1.00, 0.55, 0.80}, v3{1.00, 0.90, 0.95}, 0.10, 0.92, 0.85, 0.55);
+
+    rainbow := get_asset(Shader_Asset, "shaders/rainbow.aosl");
+    if rainbow != null {
+        m := Material.create(rainbow);
+        if m != null {
+            m.set_float("rainbowScale", 1.20);
+            m.set_float("hueSpeed", 0.20);
+            m.set_float("hueSaturation", 1.00);
+            m.set_float("hueValue", 1.00);
+            m.set_float("tintStrength", 0.65);
+            m.set_float("outlineLow", 0.04);
+            m.set_float("outlineHigh", 0.16);
+            tree_rainbow_material = m;
+        }
+    }
+}
+
+tree_level_health_multiplier :: proc(tree_level: s64) -> s64 {
+    switch clamp(tree_level, 1, MAX_TREE_LEVEL) {
+        case 1: return 1;
+        case 2: return 4;
+        case 3: return 16;
+        case 4: return 64;
+        default: return 256;
+    }
+}
+
+tree_level_log_reward :: proc(tree_level: s64) -> s64 {
+    switch clamp(tree_level, 1, MAX_TREE_LEVEL) {
+        case 1: return 1;
+        case 2: return 3;
+        case 3: return 4;
+        case 4: return 10;
+        default: return 25;
+    }
+}
+
+tree_level_material :: proc(tree_level: s64) -> Material {
+    switch clamp(tree_level, 1, MAX_TREE_LEVEL) {
+        case 2: return tree_gold_material;
+        case 3: return tree_diamond_material;
+        case 4: return tree_rainbow_material;
+        case 5: return tree_candy_material;
+        default: return null;
+    }
+}
+
+axe_visual_shader_level :: proc(tier: s64) -> s64 {
+    tier = clamp(tier, 1, MAX_AXE_TIER);
+    if tier >= 11 return 5;
+    if tier >= 9 return 4;
+    if tier >= 6 return 3;
+    if tier >= 3 return 2;
+    return 0;
+}
+
+axe_visual_material :: proc(tier: s64) -> Material {
+    level := axe_visual_shader_level(tier);
+    if level <= 0 return null;
+    return tree_level_material(level);
+}
+
+tree_level_fallback_tint :: proc(tree_level: s64) -> v4 {
+    switch clamp(tree_level, 1, MAX_TREE_LEVEL) {
+        case 2: return {1.45, 1.18, 0.34, 1};
+        case 3: return {0.55, 1.08, 1.45, 1};
+        case 4: return {1.25, 0.55, 1.45, 1};
+        case 5: return {1.45, 0.72, 1.05, 1};
+        default: return {1, 1, 1, 1};
+    }
+}
+
+try_start_chop :: proc(player: Player) -> bool {
+    if count_item(player, log_defn) >= effective_backpack_capacity(player) {
+        spawn_float_text_for_player(player, player.entity.world_position + v2{0, 1.55}, "Backpack full", {1.0, 0.12, 0.08, 1}, true);
+        if player_local_feedback(player) {
+            play_backpack_full_dud_sfx(player.entity.world_position);
+        }
+        return false;
+    }
+
+    radius := axe_chop_radius(player.axe_tier);
+    frame := get_frame_number();
+    best: Lumber_Tree = null;
+    best_d2 := radius * radius;
+    query_trees_near(player.entity.world_position, radius, ref player.nearby_tree_cache);
+    for tree: player.nearby_tree_cache {
+        if tree.is_cut || tree.is_falling continue;
+        if tree.target_frame == frame continue;
+        d2 := length_squared(tree.entity.world_position - player.entity.world_position);
+        if d2 <= best_d2 {
+            best = tree;
+            best_d2 = d2;
+        }
+    }
+
+    if best != null {
+        best.target_frame = frame;
+        best.start_chop(player, 0);
+        apply_axe_cleave(player, best);
+        g_chop_successes += 1;
+        player.swing_timer = 0.42;
+        player.camera_shake = max(player.camera_shake, axe_screen_shake(player.axe_tier));
+        player.last_chop_time = get_time();
+        spawn_juice_particles(player.entity.world_position + v2{0, 0.65}, player.axe_tier, 2 + player.axe_tier, axe_tier_color(player.axe_tier), true);
+        return true;
+    }
+    return false;
+}
+
+nearest_tree_count :: proc(player: Player) -> s64 {
+    radius := axe_chop_radius(player.axe_tier);
+    radius_d2 := radius * radius;
+    count: s64 = 0;
+    query_trees_near(player.entity.world_position, radius, ref player.nearby_tree_cache);
+    for tree: player.nearby_tree_cache {
+        if tree.is_cut || tree.is_falling continue;
+        if length_squared(tree.entity.world_position - player.entity.world_position) <= radius_d2 {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+find_nearest_unchopped_tree :: proc(pos: v2) -> Lumber_Tree {
+    best: Lumber_Tree = null;
+    best_d2 := 999999999.0;
+    tree_grid_ensure();
+    if !g_tree_grid_ready return null;
+    for i: 0..TREE_GRID_CELL_COUNT - 1 {
+        for tree: g_tree_grid[i].trees {
+            if tree == null continue;
+            if tree.is_cut || tree.is_falling continue;
+            if !#alive(tree.entity) continue;
+            d2 := length_squared(tree.entity.world_position - pos);
+            if d2 < best_d2 {
+                best = tree;
+                best_d2 = d2;
+            }
+        }
+    }
+    return best;
+}
+
+update_helicopter_auto_fly :: proc(player: Player, dt: float) {
+    if player == null return;
+    if !player.helicopter_auto_fly return;
+    if !player_helicopter_rented(player) {
+        player.helicopter_auto_fly = false;
+        return;
+    }
+    if !#alive(player.entity) return;
+
+    tree := find_nearest_unchopped_tree(player.entity.world_position);
+    if tree == null {
+        player.helicopter_auto_fly = false;
+        player.dialogue_text = "No trees found.";
+        player.dialogue_timer = 1.1;
+        return;
+    }
+
+    to_target := tree.entity.world_position - player.entity.world_position;
+    distance := length(to_target);
+    if distance <= HELICOPTER_AUTO_FLY_STOP_RADIUS return;
+
+    direction := normalize(to_target);
+    step := min(HELICOPTER_AUTO_FLY_SPEED * dt, distance - HELICOPTER_AUTO_FLY_STOP_RADIUS);
+    player.entity.set_local_position(player.entity.local_position + direction * step);
+}
+
+create_player_axe_visual :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    if player.axe_visual_entity != null && #alive(player.axe_visual_entity) return;
+
+    e := Scene.create_entity();
+    e.set_name("Held_Axe_Visual");
+    e.set_parent(player.entity, false);
+    e.set_local_position(v2{0.34, 0.42});
+    e.set_local_rotation(-35.0);
+    e.set_local_scale(v2{0.40, 0.40});
+
+    sprite := e.add_component(Sprite_Renderer);
+    sprite.set_texture(held_axe_texture);
+    sprite.layer = 6;
+    sprite.depth_offset = -0.42;
+    sprite.color = {1, 1, 1, 1};
+    sprite.flip_x = true;
+
+    player.axe_visual_entity = e;
+    player.axe_visual_sprite = sprite;
+    player.axe_visual_material_level = 0;
+}
+
+update_player_axe_visual :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    create_player_axe_visual(player);
+    if player.axe_visual_entity == null || !#alive(player.axe_visual_entity) return;
+
+    hidden := player_helicopter_rented(player) || player_tree_monster_rented(player);
+    player.axe_visual_entity.set_local_enabled(!hidden);
+    if hidden return;
+
+    if spinning_axe_mode_enabled() {
+        radius := spinning_axe_orbit_radius(player.axe_tier);
+        angle := player.spinning_axe_angle;
+        dir := v2{cos(angle), sin(angle)};
+        visual_scale := spinning_axe_visual_scale(player.axe_tier);
+        parent_flip_x := player.entity.local_scale.x < 0.0;
+        local_dir := dir;
+        local_scale_x := visual_scale;
+        local_rotation := angle * RADIANS_TO_DEGREES + 90.0;
+        if parent_flip_x {
+            local_dir.x = -local_dir.x;
+            local_scale_x = -local_scale_x;
+            local_rotation = -local_rotation;
+        }
+        player.axe_visual_entity.set_local_position(local_dir * radius + v2{0, 0.35});
+        player.axe_visual_entity.set_local_rotation(local_rotation);
+        player.axe_visual_entity.set_local_scale(v2{local_scale_x, visual_scale});
+        if player.axe_visual_sprite != null && #alive(player.axe_visual_sprite) {
+            player.axe_visual_sprite.flip_x = true;
+            shader_level := axe_visual_shader_level(player.axe_tier);
+            if shader_level > 0 && player.axe_visual_material_level != shader_level {
+                mat := axe_visual_material(player.axe_tier);
+                if mat != null {
+                    player.axe_visual_sprite.set_material(mat, false);
+                    player.axe_visual_material_level = shader_level;
+                }
+            }
+            color := axe_tier_color(player.axe_tier);
+            color.w = axe_visual_opacity(player);
+            player.axe_visual_sprite.color = color;
+        }
+        return;
+    }
+
+    bone_pos := v2{0.24, 0.30};
+    if player.animator != null && #alive(player.animator) {
+        // Use the streamed-character held item hand/aim bone. Fall back to Hand_R if needed.
+        bone_pos = player.animator.get_bone_local_position("held_item");
+        if length_squared(bone_pos) < 0.0001 {
+            bone_pos = player.animator.get_bone_local_position("Hand_R") + v2{0.05, -0.02};
+        }
+        if length_squared(bone_pos) < 0.0001 {
+            bone_pos = v2{0.24, 0.30};
+        }
+    }
+
+    facing_left := false;
+    if player.agent != null && #alive(player.agent) {
+        if player.agent.velocity.x < -0.05 {
+            facing_left = true;
+        } else if player.agent.velocity.x > 0.05 {
+            facing_left = false;
+        } else if player.last_aim_direction.x < -0.05 {
+            facing_left = true;
+        }
+    }
+
+    offset := v2{0.16, 0.08};
+    rotation := -35.0;
+    if facing_left {
+        offset.x = -0.16;
+        rotation = 35.0;
+    }
+
+    player.axe_visual_entity.set_local_position(bone_pos + offset);
+    player.axe_visual_entity.set_local_rotation(rotation);
+    player.axe_visual_entity.set_local_scale(v2{0.40, 0.40});
+    if player.axe_visual_sprite != null && #alive(player.axe_visual_sprite) {
+        player.axe_visual_sprite.flip_x = !facing_left;
+        player.axe_visual_sprite.color = {1, 1, 1, axe_visual_opacity(player)};
+    }
+}
+
+spinning_axe_tree_in_hit_zone :: proc(player: Player, tree: Lumber_Tree, axe_pos: v2, axe_dir: v2, radius: float, contact_radius: float) -> bool {
+    if player == null || tree == null return false;
+    player_center := player.entity.world_position + v2{0, 0.35};
+    tree_center := tree.entity.world_position + v2{0, 0.72};
+    tree_radius := spinning_axe_tree_collision_radius(tree);
+    combined_radius := contact_radius + tree_radius;
+
+    to_tree := tree_center - player_center;
+    dist := length(to_tree);
+    if dist > radius + combined_radius return false;
+
+    if dist > 0.05 {
+        tree_dir := normalize(to_tree);
+        quadrant_dot := tree_dir.x * axe_dir.x + tree_dir.y * axe_dir.y;
+        if quadrant_dot < SPINNING_AXE_QUADRANT_DOT return false;
+    }
+
+    if length(tree_center - axe_pos) <= combined_radius return true;
+    if length(tree.entity.world_position - axe_pos) <= combined_radius * 0.78 return true;
+    if dist <= combined_radius return true;
+    if abs(dist - radius) > combined_radius return false;
+
+    tree_dir := normalize(to_tree);
+    dot := tree_dir.x * axe_dir.x + tree_dir.y * axe_dir.y;
+    return dot >= 0.70;
+}
+
+update_spinning_axe :: proc(player: Player, dt: float) {
+    if !spinning_axe_mode_enabled() return;
+    if !player_ready_for_ui(player) return;
+    if player_helicopter_rented(player) || player_tree_monster_rented(player) return;
+
+    player.spinning_axe_angle -= SPINNING_AXE_SPEED * dt;
+    if player.spinning_axe_angle < 0.0 {
+        player.spinning_axe_angle += PI * 2.0;
+    }
+
+    radius := spinning_axe_orbit_radius(player.axe_tier);
+    contact_radius := spinning_axe_contact_radius(player.axe_tier);
+    dir := v2{cos(player.spinning_axe_angle), sin(player.spinning_axe_angle)};
+    axe_pos := player.entity.world_position + dir * radius + v2{0, 0.35};
+    now := get_time();
+    frame := get_frame_number();
+
+    backpack_full := count_item(player, log_defn) >= effective_backpack_capacity(player);
+    hit_count: s64 = 0;
+    found_blocked_tree := false;
+
+    query_trees_near(player.entity.world_position, radius + contact_radius + 1.35, ref player.nearby_tree_cache);
+    for tree: player.nearby_tree_cache {
+        if tree == null continue;
+        if tree.is_cut || tree.is_falling continue;
+        if tree.target_frame == frame continue;
+        if now - tree.last_spinning_axe_hit_at < spinning_axe_hit_cooldown(player.axe_tier) continue;
+        if !spinning_axe_tree_in_hit_zone(player, tree, axe_pos, dir, radius, contact_radius) continue;
+
+        if backpack_full {
+            found_blocked_tree = true;
+            continue;
+        }
+
+        tree.target_frame = frame;
+        tree.last_spinning_axe_hit_at = now;
+        tree.health_bar_until = now + 1.65;
+        tree.health_bar_player = player;
+        tree.start_chop(player, 0);
+        hit_count += 1;
+    }
+
+    if backpack_full && found_blocked_tree && now >= player.spinning_axe_full_feedback_at {
+        player.spinning_axe_full_feedback_at = now + 1.0;
+        spawn_float_text_for_player(player, player.entity.world_position + v2{0, 1.55}, "Backpack full", {1.0, 0.12, 0.08, 1}, true);
+        if player_local_feedback(player) {
+            play_backpack_full_dud_sfx(player.entity.world_position);
+        }
+    }
+
+    if hit_count > 0 {
+        g_chop_successes += hit_count;
+        g_observed_spinning_axe_hits += hit_count;
+        player.swing_timer = 0.32;
+        player.last_chop_time = now;
+        player.camera_shake = max(player.camera_shake, axe_screen_shake(player.axe_tier));
+        spawn_juice_particles(player.entity.world_position + v2{0, 0.65}, player.axe_tier, 1 + player.axe_tier, axe_tier_color(player.axe_tier), true);
+    }
+}
+
+sawmill_feedback_position :: proc(from_pos: v2) -> v2 {
+    best_pos := from_pos;
+    best_d2 := 999999999.0;
+    found := false;
+    for sawmill: component_iterator(Lumber_Sawmill) {
+        if sawmill == null continue;
+        d2 := length_squared(sawmill.entity.world_position - from_pos);
+        if !found || d2 < best_d2 {
+            found = true;
+            best_d2 = d2;
+            best_pos = sawmill.entity.world_position;
+        }
+    }
+    return best_pos;
+}
+
+polishing_feedback_position :: proc(from_pos: v2) -> v2 {
+    best_pos := from_pos;
+    best_d2 := 999999999.0;
+    found := false;
+    for polisher: component_iterator(Polishing_Machine) {
+        if polisher == null continue;
+        d2 := length_squared(polisher.entity.world_position - from_pos);
+        if !found || d2 < best_d2 {
+            found = true;
+            best_d2 = d2;
+            best_pos = polisher.entity.world_position;
+        }
+    }
+    return best_pos;
+}
+
+queue_logs_at_sawmill :: proc(player: Player, sawmill: Lumber_Sawmill) -> bool {
+    if player == null return false;
+    if sawmill == null || !#alive(sawmill.entity) return false;
+    sawmill_pos := sawmill.entity.world_position;
+    queued := remove_item_count(player, log_defn, count_item(player, log_defn));
+    if queued <= 0 return false;
+
+    was_refining := player.refining;
+    player.refining = true;
+    if !was_refining {
+        player.refine_timer = 0;
+    }
+    player.refine_logs_remaining += queued;
+    player.refine_logs_total += queued;
+    if !was_refining {
+        start_sawmill_processing_loop(player, sawmill.entity, sawmill_process_time(player.sawmill_tier) * queued.(float) + 0.35);
+    }
+    if was_refining {
+        player.dialogue_text = format_string("Queued +% logs", {queued});
+    } else {
+        player.dialogue_text = format_string("Sawing % logs...", {player.refine_logs_remaining});
+    }
+    player.dialogue_timer = 1.4;
+    player.ui_pop_timer = 0.2;
+    spawn_float_text_for_player(player, sawmill_pos + v2{0, 1.55}, format_string("+% logs", {queued}), {0.95, 0.82, 0.36, 1}, false);
+    spawn_juice_particles_for_player(player, sawmill_pos + v2{0, 0.75}, 1, 5, {1.0, 0.75, 0.25, 0.50}, true);
+    play_sawmill_log_queue_sfx(sawmill_pos);
+    return true;
+}
+
+queue_planks_at_polishing_machine :: proc(player: Player, polisher: Polishing_Machine) -> bool {
+    if player == null return false;
+    if polisher == null || !#alive(polisher.entity) return false;
+    if !player_has_alien_refiner(player) return false;
+    polisher_pos := polisher.entity.world_position;
+    queued := remove_item_count(player, plank_defn, count_item(player, plank_defn));
+    if queued <= 0 return false;
+
+    was_polishing := player.polishing;
+    player.polishing = true;
+    player.alien_refiner_flame_working = true;
+    if !was_polishing {
+        player.polish_timer = 0;
+    }
+    player.polish_planks_remaining += queued;
+    player.polish_planks_total += queued;
+    if !was_polishing {
+        start_polishing_processing_loop(player, polisher.entity, polishing_process_time(player.sawmill_tier) * queued.(float) + 0.35);
+    }
+    if was_polishing {
+        player.dialogue_text = format_string("Queued +% planks", {queued});
+    } else {
+        player.dialogue_text = format_string("Polishing % planks...", {player.polish_planks_remaining});
+    }
+    player.dialogue_timer = 1.4;
+    player.ui_pop_timer = 0.2;
+    spawn_float_text_for_player(player, polisher_pos + v2{0, 1.55}, format_string("+% planks", {queued}), {0.55, 1.0, 0.92, 1}, false);
+    spawn_juice_particles_for_player(player, polisher_pos + v2{0, 0.75}, 2, 6, {0.42, 1.0, 0.88, 0.55}, true);
+    play_polishing_start_sfx(polisher_pos);
+    return true;
+}
+
+sell_planks_at_seller :: proc(player: Player, seller_pos: v2) -> bool {
+    if player == null return false;
+    if get_time() - player.last_sell_time < 0.8 return false;
+
+    planks := count_item(player, plank_defn);
+    alien_planks := count_item(player, alien_plank_defn);
+    if planks <= 0 && alien_planks <= 0 return false;
+
+    player.last_sell_time = get_time();
+    removed := remove_item_count(player, plank_defn, planks);
+    alien_removed := remove_item_count(player, alien_plank_defn, alien_planks);
+    if removed <= 0 && alien_removed <= 0 return false;
+
+    payout := removed * 12 + alien_removed * 24;
+    g_last_sell_payout = payout;
+    Economy.deposit_currency(player, GOLD_CURRENCY, payout);
+    player.has_sold_planks = true;
+    save_player_progress(player);
+    spawn_float_text_scaled_feedback_for_player(player, player.entity.world_position + v2{0, 1.5}, format_string("+% gold", {payout}), {0.35, 1.0, 0.25, 1}, true, 2.5);
+    spawn_juice_particles_for_player(player, seller_pos + v2{0, 0.75}, 2, 10, {1.0, 0.84, 0.18, 0.70}, true);
+    player.dialogue_text = "Best boards in town!";
+    player.dialogue_timer = 2.0;
+    player.ui_pop_timer = 0.25;
+    play_sell_planks_sfx_for_player(player, seller_pos);
+    return true;
+}
+
+update_auto_vendor_zones :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    now := get_time();
+    if now < player.last_auto_zone_check_at + AUTO_ZONE_CHECK_SECONDS return;
+    player.last_auto_zone_check_at = now;
+
+    player_pos := player.entity.world_position;
+    near_sawmill := false;
+    near_seller := false;
+
+    for sawmill: component_iterator(Lumber_Sawmill) {
+        if sawmill == null continue;
+        if length(sawmill.entity.world_position - player_pos) <= SAWMILL_AUTO_ZONE_RADIUS {
+            near_sawmill = true;
+            if count_item(player, log_defn) > 0 {
+                queue_logs_at_sawmill(player, sawmill);
+            }
+            break;
+        }
+    }
+
+    for polisher: component_iterator(Polishing_Machine) {
+        if polisher == null continue;
+        if length(polisher.entity.world_position - player_pos) <= POLISHING_MACHINE_AUTO_ZONE_RADIUS {
+            if player_has_alien_refiner(player) && count_item(player, plank_defn) > 0 {
+                queue_planks_at_polishing_machine(player, polisher);
+            }
+            break;
+        }
+    }
+
+    for seller: component_iterator(Plank_Seller) {
+        if seller == null continue;
+        if length(seller.entity.world_position - player_pos) <= SELL_AUTO_ZONE_RADIUS {
+            near_seller = true;
+            if count_item(player, plank_defn) > 0 || count_item(player, alien_plank_defn) > 0 {
+                sell_planks_at_seller(player, seller.entity.world_position);
+            }
+            break;
+        }
+    }
+
+    g_observed_near_auto_sawmill_zone = near_sawmill;
+    g_observed_near_auto_sell_zone = near_seller;
+}
+
+forest_cover_score_at :: proc(pos: v2, tree_cache: ref [..]Lumber_Tree) -> float {
+    score := 0.0;
+    query_radius_d2 := FOREST_CANOPY_QUERY_RADIUS * FOREST_CANOPY_QUERY_RADIUS;
+    query_trees_near(pos, FOREST_CANOPY_QUERY_RADIUS, ref tree_cache);
+    for tree: tree_cache {
+        if tree == null continue;
+        if tree.is_cut continue;
+        if !#alive(tree.entity) continue;
+
+        d2 := length_squared(tree.entity.world_position - pos);
+        if d2 > query_radius_d2 continue;
+
+        scale := max(abs(tree.entity.local_scale.x), abs(tree.entity.local_scale.y));
+        canopy_radius := FOREST_CANOPY_BASE_RADIUS + scale * FOREST_CANOPY_SCALE_RADIUS;
+        canopy_radius_d2 := canopy_radius * canopy_radius;
+        if d2 <= canopy_radius_d2 {
+            score += 1.0;
+        } else {
+            distance := sqrt(d2);
+            falloff_span := max(0.1, FOREST_CANOPY_QUERY_RADIUS - canopy_radius);
+            edge_t := clamp((FOREST_CANOPY_QUERY_RADIUS - distance) / falloff_span, 0.0, 1.0);
+            score += edge_t * FOREST_CANOPY_EDGE_WEIGHT;
+        }
+    }
+    return score;
+}
+
+forest_distance_slow_factor :: proc(pos: v2) -> float {
+    span := max(1.0, FOREST_DISTANCE_SLOW_FULL - FOREST_DISTANCE_SLOW_START);
+    linear := clamp((length(pos) - FOREST_DISTANCE_SLOW_START) / span, 0.0, 1.0);
+    return pow(linear, 0.35);
+}
+
+forest_density_slow_factor :: proc(cover_score: float) -> float {
+    span := max(1.0, FOREST_DENSE_COVER_SCORE - FOREST_SURROUNDED_COVER_SCORE);
+    linear := clamp((cover_score - FOREST_SURROUNDED_COVER_SCORE) / span, 0.0, 1.0);
+    return pow(linear, 1.55);
+}
+
+forest_axe_slow_reduction_scale :: proc(axe_tier: s64) -> float {
+    tier_t := 0.0;
+    if MAX_AXE_TIER > 1 {
+        tier_t = clamp((clamp(axe_tier, 1, MAX_AXE_TIER) - 1).(float) / (MAX_AXE_TIER - 1).(float), 0.0, 1.0);
+    }
+    return lerp(1.0, 1.0 - FOREST_AXE_TIER_MAX_SLOW_RELIEF, tier_t);
+}
+
+forest_speed_multiplier :: proc(pos: v2, cover_score: float, axe_tier: s64) -> float {
+    density_factor := forest_density_slow_factor(cover_score);
+    if density_factor <= 0.0 return 1.0;
+
+    distance_factor := forest_distance_slow_factor(pos);
+    max_slow := lerp(FOREST_NEAR_MAX_SLOW, FOREST_FAR_MAX_SLOW, distance_factor);
+    density_multiplier := clamp(1.0 - density_factor * max_slow, FOREST_MIN_SPEED_MULTIPLIER, 1.0);
+    distance_cap := lerp(FOREST_NEAR_COVER_SPEED_CAP, FOREST_MIN_SPEED_MULTIPLIER, distance_factor);
+    base_multiplier := min(density_multiplier, distance_cap);
+    reduction := 1.0 - base_multiplier;
+    reduction *= forest_axe_slow_reduction_scale(axe_tier);
+    return clamp(1.0 - reduction, FOREST_MIN_SPEED_MULTIPLIER, 1.0);
+}
+
+apply_forest_density_slowdown :: proc(player: Player, dt: float) {
+    if player == null return;
+    if !#alive(player.entity) return;
+
+    pos := player.entity.local_position;
+    if player_tree_monster_rented(player) {
+        speed_multiplier := 1.08;
+        if player.agent != null {
+            player.agent.movement_speed = PLAYER_DEFAULT_MOVEMENT_SPEED * speed_multiplier;
+        }
+        g_observed_forest_tree_count = 0;
+        g_observed_forest_cover_score = 0.0;
+        g_observed_forest_slowed = false;
+        g_observed_forest_distance_factor = 0.0;
+        g_observed_forest_speed_multiplier = speed_multiplier;
+        return;
+    }
+
+    if player_helicopter_rented(player) {
+        speed_multiplier := 1.0;
+        if player_has_unlimited_move_speed(player) {
+            speed_multiplier = 1.2;
+        }
+        if player.agent != null {
+            player.agent.movement_speed = PLAYER_DEFAULT_MOVEMENT_SPEED * speed_multiplier;
+        }
+        g_observed_forest_tree_count = 0;
+        g_observed_forest_cover_score = 0.0;
+        g_observed_forest_slowed = false;
+        g_observed_forest_distance_factor = 0.0;
+        g_observed_forest_speed_multiplier = speed_multiplier;
+        return;
+    }
+
+    cover_score := forest_cover_score_at(pos, ref player.nearby_tree_cache);
+    speed_multiplier := forest_speed_multiplier(pos, cover_score, player.axe_tier);
+    if player_has_unlimited_move_speed(player) {
+        speed_multiplier = 1.2;
+    }
+
+    if player.agent != null {
+        player.agent.movement_speed = PLAYER_DEFAULT_MOVEMENT_SPEED * speed_multiplier;
+    }
+
+    g_observed_forest_tree_count = cover_score.(s64);
+    g_observed_forest_cover_score = cover_score;
+    g_observed_forest_slowed = speed_multiplier < 0.999;
+    g_observed_forest_distance_factor = forest_distance_slow_factor(pos);
+    g_observed_forest_speed_multiplier = speed_multiplier;
+
+    if get_time() >= player.forest_brush_feedback_at {
+        if speed_multiplier < 0.75 {
+            player.forest_brush_feedback_at = get_time() + 1.6;
+            player.dialogue_text = "Thick brush";
+            player.dialogue_timer = 0.9;
+            play_positional_sfx("$AO/sfx/Footsteps/footstep_08.wav", pos, 0.18, 0.08);
+        }
+    }
+}
+
+find_goal_position :: proc(player: Player) -> v2 {
+    if !player.has_sold_planks && (count_item(player, plank_defn) > 1 || count_item(player, alien_plank_defn) > 1) return v2{4.6, -2.2};
+    return v2{-4.1, 1.2};
+}
+
+should_draw_goal_arrow :: proc(player: Player) -> bool {
+    logs := count_item(player, log_defn);
+    planks := count_item(player, plank_defn);
+    alien_planks := count_item(player, alien_plank_defn);
+    if logs >= effective_backpack_capacity(player) return true;
+    if !player.has_sold_planks && (planks > 1 || alien_planks > 1) return true;
+    return false;
+}
+
+set_axe_level :: proc(player: Player, level: s64 = MAX_AXE_TIER) {
+    if player == null return;
+    player.axe_tier = clamp(level, 1, MAX_AXE_TIER);
+    save_player_progress(player);
+    player.dialogue_text = format_string("Axe level %", {player.axe_tier});
+    player.dialogue_timer = 1.5;
+    player.ui_pop_timer = 0.25;
+    spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("Axe: %", {player.axe_tier}), axe_tier_color(player.axe_tier), true);
+} @chat_command
+
+set_infinite_backpack_state :: proc(player: Player, enabled: bool) {
+    if player == null return;
+    player.infinite_backpack = enabled;
+    save_player_progress(player);
+    if enabled {
+        player.dialogue_text = "Infinite backpack";
+        spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Infinite backpack", {0.62, 0.88, 1.0, 1}, true);
+    } else {
+        player.dialogue_text = "Backpack normal";
+        spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Backpack normal", {0.62, 0.88, 1.0, 1}, true);
+    }
+    player.dialogue_timer = 1.5;
+    player.ui_pop_timer = 0.25;
+}
+
+infinite_backpack :: proc(player: Player, enabled: bool = true) {
+    set_infinite_backpack_state(player, enabled);
+} @chat_command @any
+
+infinite_bag :: proc(player: Player, enabled: bool = true) {
+    set_infinite_backpack_state(player, enabled);
+} @chat_command @any
+
+set_coins :: proc(player: Player, amount: s64 = 10000) {
+    if player == null return;
+    amount = max(0, amount);
+    current := Economy.get_balance(player, GOLD_CURRENCY);
+    if current < amount {
+        Economy.deposit_currency(player, GOLD_CURRENCY, amount - current);
+    } else if current > amount {
+        Economy.withdraw_currency(player, GOLD_CURRENCY, current - amount);
+    }
+    player.dialogue_text = format_string("Gold: %", {amount});
+    player.dialogue_timer = 1.5;
+    spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("Gold: %", {amount}), {1.0, 0.86, 0.18, 1}, true);
+} @chat_command @any
+
+give_coins :: proc(player: Player, amount: s64 = 1000) {
+    if player == null return;
+    if amount <= 0 return;
+    Economy.deposit_currency(player, GOLD_CURRENCY, amount);
+    player.dialogue_text = format_string("+% gold", {amount});
+    player.dialogue_timer = 1.5;
+    spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("+% gold", {amount}), {1.0, 0.86, 0.18, 1}, true);
+} @chat_command @any
+
+reset :: proc(player: Player) {
+    if player == null return;
+
+    if player_helicopter_rented(player) {
+        player.helicopter_rental.finish_rental(false);
+    }
+    if player_tree_monster_rented(player) {
+        player.tree_monster_rental.finish_rental(false);
+    }
+
+    if player.default_inventory != null {
+        Items.destroy_all_items(player.default_inventory);
+    }
+    Economy.delete_save_data(player);
+    current_gold := Economy.get_balance(player, GOLD_CURRENCY);
+    if current_gold > 0 {
+        Economy.withdraw_currency(player, GOLD_CURRENCY, current_gold);
+    }
+    Save.delete_all_keys(player);
+
+    player.axe_tier = 1;
+    player.sawmill_tier = 1;
+    player.backpack_tier = 1;
+    player.infinite_backpack = false;
+    player.owns_auto_sawmill = false;
+    player.owns_unlimited_backpack_product = false;
+    player.owns_unlimited_move_speed_product = false;
+    player.alien_refiner_unlocked = false;
+    player.has_sold_planks = false;
+    player.onboarding_step = 0;
+    player.refining = false;
+    player.polishing = false;
+    player.alien_refiner_flame_working = false;
+    player.refine_timer = 0;
+    player.refine_logs_remaining = 0;
+    player.refine_logs_total = 0;
+    player.auto_refine_timer = 0;
+    player.show_upgrade_shop = false;
+    player.show_upgrades_menu = false;
+    player.show_exit_helicopter_confirm = false;
+    player.helicopter_auto_fly = false;
+    save_player_progress(player);
+
+    player.dialogue_text = "Progress reset";
+    player.dialogue_timer = 1.8;
+    player.ui_pop_timer = 0.25;
+    spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Progress reset", {1.0, 0.35, 0.25, 1}, true);
+} @chat_command @any
+
+set_spinning_axe_mode :: proc(player: Player, enabled: bool = true) {
+    g_spinning_axe_mode = enabled;
+    if player != null {
+        if enabled {
+            player.dialogue_text = "Spinning axe on";
+            spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Spin axe", axe_tier_color(player.axe_tier), true);
+        } else {
+            player.dialogue_text = "Chop mode on";
+            spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Chop axe", axe_tier_color(player.axe_tier), true);
+        }
+        player.dialogue_timer = 1.4;
+        play_positional_sfx("$AO/sfx/FUI Holo Mechanism Activate.wav", player.entity.world_position, 0.18, 0.04);
+    }
+} @chat_command
+
+toggle_spinning_axe_mode :: proc(player: Player) {
+    set_spinning_axe_mode(player, !g_spinning_axe_mode);
+} @chat_command
+
+tam :: proc(player: Player) {
+    set_spinning_axe_mode(player, !g_spinning_axe_mode);
+} @chat_command
+
+set_game_message :: proc(player: Player, message: string = "") {
+    Save.set_game_string(GLOBAL_TOP_MESSAGE_SAVE_KEY, message);
+    if player == null return;
+
+    if message.count > 0 {
+        player.dialogue_text = "Message set";
+    } else {
+        player.dialogue_text = "Message cleared";
+    }
+    player.dialogue_timer = 1.4;
+} @chat_command
+
+Chop_Ability :: class : Ability_Base {
+    on_init :: method() {
+        name = "Chop";
+        icon = get_asset(Texture_Asset, "Axe Icon_2c9119.png");
+        keybind_override = chop_keybind;
+    }
+
+    can_use :: method() -> bool {
+        if spinning_axe_mode_enabled() return false;
+        if player_helicopter_rented(player) return false;
+        return true;
+    }
+
+    on_update :: method(params: ref Ability_Update_Params) {
+        if params.clicked {
+            player.chop_request += 1;
+        }
+    }
+
+    on_draw_button :: method(rect: Rect) {
+        p := player;
+        if p == null return;
+        ts := UI.default_text_settings();
+        ts.size = 24;
+        ts.halign = .RIGHT;
+        ts.valign = .BOTTOM;
+        ts.color = {1.0, 0.94, 0.72, 1};
+        UI.text(rect.inset(7), ts, "Tier: %", {max(1, p.axe_tier)});
+        ring_color := axe_tier_color(p.axe_tier);
+        UI.wire_box(rect.min + v2{6, 6}, rect.max - v2{6, 6}, 0.05 + p.axe_tier.(float) * 0.008, ring_color);
+    }
+}
+
+Exit_Helicopter_Ability :: class : Ability_Base {
+    on_init :: method() {
+        name = "Exit Heli";
+        icon = get_asset(Texture_Asset, "Axe Icon_2c9119.png");
+    }
+
+    can_use :: method() -> bool {
+        return player_helicopter_rented(player);
+    }
+
+    on_update :: method(params: ref Ability_Update_Params) {
+        if params.clicked && params.can_use {
+            player.show_exit_helicopter_confirm = true;
+            current_cooldown = 0.25;
+        }
+    }
+
+    on_draw_button :: method(rect: Rect) {
+        ts := UI.default_text_settings();
+        ts.size = 26;
+        ts.halign = .CENTER;
+        ts.valign = .CENTER;
+        ts.color = {1.0, 0.94, 0.72, 1};
+        UI.text(rect.inset(5), ts, "Exit");
+    }
+}
+
+Auto_Fly_Helicopter_Ability :: class : Ability_Base {
+    on_init :: method() {
+        name = "Auto Fly";
+        icon = get_asset(Texture_Asset, "Axe Icon_2c9119.png");
+    }
+
+    can_use :: method() -> bool {
+        return player_helicopter_rented(player);
+    }
+
+    on_update :: method(params: ref Ability_Update_Params) {
+        if params.clicked && params.can_use {
+            player.helicopter_auto_fly = !player.helicopter_auto_fly;
+            if player.helicopter_auto_fly {
+                player.dialogue_text = "Auto fly on.";
+            } else {
+                player.dialogue_text = "Auto fly off.";
+            }
+            player.dialogue_timer = 1.0;
+            if player.is_local() play_ui_sfx("click_6d65ee.wav", 0.16, 0.02);
+            current_cooldown = 0.25;
+        }
+    }
+
+    on_draw_button :: method(rect: Rect) {
+        p := player;
+        ts := UI.default_text_settings();
+        ts.size = 22;
+        ts.halign = .CENTER;
+        ts.valign = .CENTER;
+        ts.color = {1.0, 0.94, 0.72, 1};
+        label := "Auto";
+        if p != null && p.helicopter_auto_fly label = "Auto On";
+        UI.text(rect.inset(5), ts, label);
+    }
+}
+
+// Per player state
+Player :: class : Player_Base {
+    axe_tier: s64 @ao_serialize;
+    show_upgrade_shop: bool @ao_serialize;
+    show_upgrades_menu: bool @ao_serialize;
+    sawmill_tier: s64 @ao_serialize;
+    backpack_tier: s64 @ao_serialize;
+    infinite_backpack: bool @ao_serialize;
+    owns_auto_sawmill: bool @ao_serialize;
+    owns_unlimited_backpack_product: bool @ao_serialize;
+    owns_unlimited_move_speed_product: bool @ao_serialize;
+    alien_refiner_unlocked: bool @ao_serialize;
+    refine_timer: float;
+    auto_refine_timer: float;
+    polish_timer: float;
+    refining: bool;
+    polishing: bool;
+    alien_refiner_flame_working: bool @ao_serialize;
+    refine_logs_remaining: s64;
+    refine_logs_total: s64;
+    polish_planks_remaining: s64;
+    polish_planks_total: s64;
+    swing_timer: float;
+    camera_shake: float;
+    last_chop_time: float;
+    onboarding_step: s64;
+    dialogue_timer: float;
+    dialogue_text: string;
+    ui_pop_timer: float;
+    last_sell_time: float;
+    last_auto_zone_check_at: float;
+    has_sold_planks: bool @ao_serialize;
+    chop_request: s64;
+    processed_chop_request: s64;
+    forest_brush_feedback_at: float;
+    navmesh_lock_applied: bool;
+    helicopter_rental: Rentable_Helicopter;
+    tree_monster_rental: Rentable_Tree_Monster;
+    axe_visual_entity: Entity;
+    axe_visual_sprite: Sprite_Renderer;
+    axe_visual_material_level: s64;
+    show_exit_helicopter_confirm: bool @ao_serialize;
+    helicopter_auto_fly: bool @ao_serialize;
+    spinning_axe_angle: float;
+    spinning_axe_full_feedback_at: float;
+    sawmill_processing_sound_id: u64;
+    sawmill_processing_loop_active: bool;
+    polishing_processing_sound_id: u64;
+    polishing_processing_loop_active: bool;
+    bacteria_tag_flash_until: float;
+    nearby_tree_cache: [..]Lumber_Tree;
+
+    ao_start :: method() {
+        if axe_tier <= 0 axe_tier = 1;
+        if sawmill_tier <= 0 sawmill_tier = 1;
+        if backpack_tier <= 0 backpack_tier = 1;
+        if backpack_tier > MAX_BACKPACK_TIER backpack_tier = MAX_BACKPACK_TIER;
+        onboarding_step = 0;
+        load_player_progress(this);
+        navmesh_lock_applied = lock_player_to_world_navmesh(this);
+        create_player_axe_visual(this);
+
+        if (is_local()) {
+            asset := get_asset(SFX_Asset, GAME_START_MUSIC);
+            desc := SFX.default_sfx_desc();
+            desc.local_only = true;
+            desc.loop = true;
+            desc.volume = GAME_START_MUSIC_VOLUME;
+            desc.channel = .MUSIC;
+            g_game_start_music_sound_id = SFX.play(asset, desc);
+        }
+    }
+
+    ao_update :: method(dt: float) {
+        if !navmesh_lock_applied {
+            navmesh_lock_applied = lock_player_to_world_navmesh(this);
+        }
+        update_helicopter_auto_fly(this, dt);
+        update_spinning_axe(this, dt);
+        update_player_axe_visual(this);
+        apply_forest_density_slowdown(this, dt);
+
+        if swing_timer > 0 swing_timer -= dt;
+        if camera_shake > 0 camera_shake = max(0.0, camera_shake - dt * 1.6);
+        if dialogue_timer > 0 dialogue_timer -= dt;
+        if ui_pop_timer > 0 ui_pop_timer -= dt;
+        g_observed_logs = count_item(this, log_defn);
+        g_observed_planks = count_item(this, plank_defn);
+        g_observed_alien_planks = count_item(this, alien_plank_defn);
+        g_observed_axe_tier = axe_tier;
+        g_observed_sawmill_tier = sawmill_tier;
+        g_observed_backpack_tier = backpack_tier;
+        g_observed_backpack_capacity = effective_backpack_capacity(this);
+        g_observed_show_upgrades_menu = show_upgrades_menu;
+        g_observed_refining = refining;
+        g_observed_near_tree_count = nearest_tree_count(this);
+        g_observed_axe_damage = axe_damage(axe_tier);
+        g_observed_axe_hits_to_chop = axe_hits_to_chop(axe_tier);
+        g_observed_axe_radius = axe_chop_radius(axe_tier);
+        g_observed_spinning_axe_mode = spinning_axe_mode_enabled();
+        g_observed_spinning_axe_radius = spinning_axe_orbit_radius(axe_tier);
+        g_observed_spinning_axe_damage = axe_damage(axe_tier);
+        g_observed_spinning_axe_visual_scale = spinning_axe_visual_scale(axe_tier);
+        g_observed_sawmill_auto_time = sawmill_auto_process_time(sawmill_tier);
+        g_observed_auto_product_id = AUTO_SAWMILL_PRODUCT_ID;
+        g_observed_bottom_left_hud_height = stats_hud_rect().height();
+        g_observed_sawmill_progress = 0.0;
+        if refining {
+            g_observed_sawmill_progress = clamp(refine_timer / sawmill_process_time(sawmill_tier), 0.0, 1.0);
+        } else if player_has_auto_sawmill(this) && count_item(this, log_defn) > 0 {
+            g_observed_sawmill_progress = clamp(auto_refine_timer / sawmill_auto_process_time(sawmill_tier), 0.0, 1.0);
+        }
+
+        if chop_request > processed_chop_request {
+            processed_chop_request = chop_request;
+            if !spinning_axe_mode_enabled() && get_time() - last_chop_time > 0.15 {
+                try_start_chop(this);
+            }
+        }
+
+        if show_upgrade_shop {
+            near_shop := false;
+            for shop: component_iterator(Axe_Shop_NPC) {
+                if length(shop.entity.world_position - entity.world_position) <= 4.0 near_shop = true;
+            }
+            if !near_shop show_upgrade_shop = false;
+        }
+
+        update_auto_vendor_zones(this);
+
+        if refining {
+            refine_timer += dt;
+            process_time := sawmill_process_time(sawmill_tier);
+            if refine_timer >= process_time {
+                refine_timer = 0;
+                if refine_logs_remaining > 0 {
+                    refine_logs_remaining -= 1;
+                    give_item(this, plank_defn, 1);
+                    feedback_pos := sawmill_feedback_position(entity.world_position);
+                    spawn_float_text_for_player(this, feedback_pos + v2{0, 1.6}, "+1 plank", {0.95, 0.72, 0.32, 1}, true);
+                    spawn_juice_particles_for_player(this, feedback_pos + v2{0, 0.9}, 1, 5, {1.0, 0.75, 0.25, 0.65}, true);
+                    if refine_logs_remaining <= 0 {
+                        refining = false;
+                        refine_logs_remaining = 0;
+                        refine_logs_total = 0;
+                        stop_sawmill_processing_loop(this);
+                        dialogue_text = "Fresh planks! Sell them.";
+                        dialogue_timer = 1.8;
+                    }
+                    ui_pop_timer = 0.25;
+                } else {
+                    refining = false;
+                    refine_logs_remaining = 0;
+                    refine_logs_total = 0;
+                    stop_sawmill_processing_loop(this);
+                }
+            }
+        }
+
+        if polishing {
+            polish_timer += dt;
+            process_time := polishing_process_time(sawmill_tier);
+            if polish_timer >= process_time {
+                polish_timer = 0;
+                if polish_planks_remaining > 0 {
+                    polish_planks_remaining -= 1;
+                    give_item(this, alien_plank_defn, 1);
+                    feedback_pos := polishing_feedback_position(entity.world_position);
+                    spawn_float_text_for_player(this, feedback_pos + v2{0, 1.6}, "+1 alien plank", {0.42, 1.0, 0.88, 1}, true);
+                    spawn_juice_particles_for_player(this, feedback_pos + v2{0, 0.9}, 2, 6, {0.42, 1.0, 0.88, 0.70}, true);
+                    play_polishing_finish_sfx(feedback_pos);
+                    if polish_planks_remaining <= 0 {
+                        polishing = false;
+                        alien_refiner_flame_working = false;
+                        polish_planks_remaining = 0;
+                        polish_planks_total = 0;
+                        stop_polishing_processing_loop(this);
+                        dialogue_text = "Alien planks ready.";
+                        dialogue_timer = 1.8;
+                    }
+                    ui_pop_timer = 0.25;
+                } else {
+                    polishing = false;
+                    alien_refiner_flame_working = false;
+                    polish_planks_remaining = 0;
+                    polish_planks_total = 0;
+                    stop_polishing_processing_loop(this);
+                }
+            }
+        }
+
+        if !refining && player_has_auto_sawmill(this) && count_item(this, log_defn) > 0 {
+            auto_refine_timer += dt;
+            process_time := sawmill_auto_process_time(sawmill_tier);
+            if auto_refine_timer >= process_time {
+                auto_refine_timer = 0;
+                removed := remove_item_count(this, log_defn, 1);
+                if removed > 0 {
+                    give_item(this, plank_defn, 1);
+                    ui_pop_timer = 0.2;
+                    feedback_pos := sawmill_feedback_position(entity.world_position);
+                    spawn_float_text_for_player(this, feedback_pos + v2{0, 1.45}, "+1 plank", {0.95, 0.72, 0.32, 1}, false);
+                    spawn_juice_particles_for_player(this, feedback_pos + v2{0, 0.9}, 1, 3, {1.0, 0.75, 0.25, 0.45}, true);
+                }
+            }
+        } else {
+            auto_refine_timer = 0;
+        }
+
+        previous_onboarding_step := onboarding_step;
+        if count_item(this, log_defn) > 0 && onboarding_step < 1 onboarding_step = 1;
+        if (count_item(this, plank_defn) > 0 || count_item(this, alien_plank_defn) > 0) && onboarding_step < 2 onboarding_step = 2;
+        if Economy.get_balance(this, GOLD_CURRENCY) > 0 && onboarding_step < 3 onboarding_step = 3;
+        if onboarding_step != previous_onboarding_step {
+            save_player_progress(this);
+        }
+    }
+
+    ao_late_update :: method(dt: float) {
+        if !#alive(entity) return;
+        if is_local() && camera_shake > 0 {
+            rng := rng_root_seed() + get_frame_number();
+            camera.position.x += rng_range_float(ref rng, -camera_shake, camera_shake);
+            camera.position.y += rng_range_float(ref rng, -camera_shake, camera_shake);
+        }
+        if is_local() && bacteria_tag_flash_until > get_time() {
+            draw_bacteria_tag_post_fx(this);
+        }
+
+        if is_local_or_server() {
+            if !spinning_axe_mode_enabled() {
+                draw_ability_button(this, Chop_Ability, 0);
+            }
+            if player_helicopter_rented(this) {
+                draw_ability_button(this, Exit_Helicopter_Ability, 1);
+                draw_ability_button(this, Auto_Fly_Helicopter_Ability, 2);
+            }
+            draw_lumber_inventory(this);
+            draw_lumber_topbar(this);
+            draw_global_top_message(this);
+            draw_lumber_world_overlays(this);
+            if show_upgrades_menu {
+                draw_upgrades_menu(this);
+            }
+            if show_exit_helicopter_confirm {
+                draw_exit_helicopter_confirm(this);
+            }
+        }
+    }
+
+    ao_end :: method() {
+        stop_sawmill_processing_loop(this);
+        stop_polishing_processing_loop(this);
+        if axe_visual_entity != null && #alive(axe_visual_entity) {
+            axe_visual_entity.destroy();
+        }
+    }
+
+    ao_can_use_ability :: method(ability: Ability_Base) -> bool {
+        return true;
+    }
+
+    ao_can_use_interactable :: method(interactable: Interactable) -> bool {
+        return true;
+    }
+}
+
+Lumber_Tree :: class : Component {
+    tree_level: s64 @ao_serialize;
+    original_pos: v2;
+    original_scale: v2;
+    is_cut: bool;
+    is_falling: bool;
+    target_frame: u64;
+    regrow_at: float;
+    fall_age: float;
+    fall_delay: float;
+    fall_dir: float;
+    reward_tier: s64;
+    health: s64;
+    will_fall: bool;
+    chopping_player: Player;
+    thumped: bool;
+    impact_spawned: bool;
+    fall_anim_started: bool;
+    animator: Spine_Animator;
+    last_spinning_axe_hit_at: float;
+    health_bar_until: float;
+    health_bar_flash_until: float;
+    health_bar_player: Player;
+
+    ao_start :: method() {
+        if tree_level <= 0 tree_level = 1;
+        if tree_level > MAX_TREE_LEVEL tree_level = MAX_TREE_LEVEL;
+        original_pos = entity.local_position;
+        original_scale = entity.local_scale;
+        health = max_health();
+        last_spinning_axe_hit_at = -SPINNING_AXE_TREE_HIT_COOLDOWN;
+        setup_tree_spine();
+        tree_grid_mark_dirty();
+    }
+
+    max_health :: method() -> s64 {
+        if tree_level <= 0 tree_level = 1;
+        return TREE_HEALTH * tree_level_health_multiplier(tree_level);
+    }
+
+    setup_tree_spine :: method() {
+        sprite := entity.get_component(Sprite_Renderer);
+        if sprite != null {
+            sprite.color = {1, 1, 1, 0};
+        }
+        animator = entity.get_component(Spine_Animator);
+        if animator == null {
+            animator = entity.add_component(Spine_Animator);
+        }
+        animator.awaken();
+        animator.set_skeleton(tree_spine_asset);
+        animator.depth_offset = -0.274;
+        animator.set_skin("default");
+        animator.refresh_skins();
+        animator.layer = 0;
+        animator.scale = v2{1, 1};
+        mat := tree_level_material(tree_level);
+        if mat != null {
+            animator.set_material(mat, false);
+            animator.color_multiplier = {1, 1, 1, 1};
+        } else {
+            animator.color_multiplier = tree_level_fallback_tint(tree_level);
+        }
+        animator.set_animation("idle", true, 0);
+    }
+
+    force_respawn :: method() {
+        is_cut = false;
+        is_falling = false;
+        thumped = false;
+        impact_spawned = false;
+        fall_anim_started = false;
+        will_fall = false;
+        fall_age = 0;
+        health = max_health();
+        chopping_player = null;
+        health_bar_player = null;
+        health_bar_until = 0;
+        health_bar_flash_until = 0;
+        last_spinning_axe_hit_at = -SPINNING_AXE_TREE_HIT_COOLDOWN;
+        entity.set_local_position(original_pos);
+        entity.set_local_rotation(0);
+        entity.set_local_scale(original_scale * 0.2);
+        setup_tree_spine();
+    }
+
+    start_chop :: method(player: Player, start_delay: float) {
+        damage := axe_damage(player.axe_tier);
+        is_crit := roll_axe_crit(player, this);
+        if is_crit {
+            damage *= 4;
+        }
+        start_chop_damage(player, start_delay, damage, is_crit);
+    }
+
+    start_chop_damage :: method(player: Player, start_delay: float, damage: s64, is_crit: bool = false) {
+        if is_cut || is_falling return;
+        if animator == null setup_tree_spine();
+        tree_health := max_health();
+        if health <= 0 health = tree_health;
+        health = max(0, health - damage);
+        will_fall = health <= 0;
+        is_falling = true;
+        fall_age = -start_delay;
+        fall_delay = start_delay;
+        thumped = false;
+        impact_spawned = false;
+        fall_anim_started = false;
+        reward_tier = max(1, player.axe_tier);
+        chopping_player = player;
+        fall_dir = 1.0;
+        if player != null && player.entity.world_position.x > entity.world_position.x fall_dir = -1.0;
+        if player != null player.camera_shake = max(player.camera_shake, axe_screen_shake(player.axe_tier));
+        animator.set_animation("chop", false, 0);
+        animator.scale = v2{fall_dir, 1};
+        spawn_juice_particles_for_player(player, entity.world_position + v2{0, 0.8}, reward_tier, 4 + reward_tier, {0.35, 0.95, 0.22, 0.55}, false);
+        if is_crit {
+            spawn_float_text_scaled_feedback_for_player(player, entity.world_position + v2{0, 1.45}, "CRIT!", {0.18, 0.72, 1.0, 1}, true, 1.45);
+            spawn_juice_particles_for_player(player, entity.world_position + v2{0, 0.95}, reward_tier, 5 + reward_tier, {0.18, 0.72, 1.0, 0.65}, true);
+        }
+        if player_local_feedback(player) {
+            play_positional_sfx("cm_shake_tree_e69bfc.wav", entity.world_position, 0.24, 0.18);
+            if will_fall {
+                play_positional_sfx_speed("wood_chop_1c256a.wav", entity.world_position, 0.20, 0.70, 0.03);
+            }
+        }
+        if !will_fall || damage < tree_health {
+            health_bar_until = get_time() + 1.65;
+            health_bar_flash_until = get_time() + 0.12;
+            health_bar_player = player;
+            if !spinning_axe_mode_enabled() {
+                hit_numerator := tree_health - health;
+                hit_progress := clamp(hit_numerator.(float) / max(1, tree_health).(float), 0.0, 1.0);
+                hit_text_scale := lerp(1.0, 2.0, hit_progress);
+                spawn_float_text_scaled_feedback_for_player(player, entity.world_position + v2{0, 1.0}, format_string("%/%", {hit_numerator, tree_health}), {0.9, 0.68, 0.36, 1}, false, hit_text_scale);
+            }
+        }
+    }
+
+    ao_update :: method(dt: float) {
+        if is_falling {
+            fall_age += dt;
+            if fall_age < 0 return;
+
+            // Tactile sequence: wind-up shake, axe impact chips, wobble, fall, ground thump.
+            if fall_age < 0.16 {
+                wobble := sin(fall_age * 58.0) * 2.5;
+                entity.set_local_rotation(wobble);
+                entity.set_local_scale(original_scale * (1.0 + fall_age * 0.35));
+                return;
+            }
+
+            if fall_age >= 0.16 && !impact_spawned {
+                impact_spawned = true;
+                spawn_chip_for_player(chopping_player, entity.world_position + v2{0, 0.35}, reward_tier);
+                spawn_juice_particles_for_player(chopping_player, entity.world_position + v2{0, 0.75}, reward_tier, 5 + reward_tier, axe_tier_color(reward_tier), true);
+                if player_local_feedback(chopping_player) {
+                    play_positional_sfx("wood_chop_1c256a.wav", entity.world_position, 0.62, 0.12);
+                }
+            }
+
+            if !will_fall && fall_age >= 0.18 {
+                is_falling = false;
+                entity.set_local_position(original_pos);
+                entity.set_local_rotation(0);
+                entity.set_local_scale(original_scale);
+                if animator != null {
+                    animator.scale = v2{1, 1};
+                    animator.set_animation("idle", true, 0);
+                }
+                return;
+            }
+
+            if !fall_anim_started {
+                fall_anim_started = true;
+                if animator != null {
+                    animator.set_animation("fall", false, 0);
+                }
+            }
+
+            fall_t := min(1.0, max(0.0, (fall_age - 0.2) / 0.62));
+            ease := fall_t * fall_t * (3.0 - 2.0 * fall_t);
+            entity.set_local_rotation(sin(fall_age * 34.0) * (1.0 - ease) * 2.5);
+            entity.set_local_position(original_pos);
+            entity.set_local_scale(original_scale * (1.06 - ease * 0.16));
+
+            if fall_t >= 1.0 && !thumped {
+                thumped = true;
+                is_falling = false;
+                is_cut = true;
+                health = max_health();
+                rng := rng_root_seed() + entity.id * 113 + get_frame_number() * 17;
+                regrow_at = get_time() + tree_regrow_seconds_for_axe(reward_tier, ref rng);
+                spawn_juice_particles_for_player(chopping_player, original_pos + v2{fall_dir * 0.8, 0.1}, reward_tier, 8 + reward_tier, {0.58, 0.43, 0.25, 0.6}, false);
+                spawn_log_pickup(original_pos, chopping_player, tree_level_log_reward(tree_level), reward_tier);
+                if player_local_feedback(chopping_player) {
+                    play_positional_sfx("cm_pick_up_item_f8d7c9.wav", original_pos, 0.42, 0.04);
+                }
+                if animator != null {
+                    animator.set_animation("fallen_idle", true, 0);
+                }
+                // Keep the entity enabled so this Lumber_Tree component keeps
+                // receiving ao_update and can fire the regrow timer.
+                entity.set_local_position(original_pos);
+                entity.set_local_rotation(0);
+                entity.set_local_scale(original_scale * 0.01);
+            }
+            return;
+        }
+
+        if is_cut && get_time() >= regrow_at {
+            is_cut = false;
+            health = max_health();
+            last_spinning_axe_hit_at = -SPINNING_AXE_TREE_HIT_COOLDOWN;
+            will_fall = false;
+            entity.set_local_position(original_pos);
+            entity.set_local_rotation(0);
+            entity.set_local_scale(original_scale * 0.2);
+            setup_tree_spine();
+            spawn_float_text_for_player(chopping_player, original_pos + v2{0, 1.1}, "regrown", {0.35, 1.0, 0.35, 1}, false);
+        }
+        if !is_cut && entity.get_local_enabled() {
+            if entity.local_scale.x < original_scale.x {
+                entity.lerp_local_scale(original_scale, min(1.0, dt * 4.0));
+            }
+        }
+    }
+}
+
+Tree_Level_Ring :: class : Component {
+    tree_level: s64 @ao_serialize;
+    configured: bool;
+
+    ao_start :: method() {
+        if tree_level <= 0 tree_level = 2;
+        configure_tree_level_children();
+    }
+
+    ao_update :: method(dt: float) {
+        if !configured {
+            configure_tree_level_children();
+        }
+    }
+
+    configure_tree_level_children :: method() {
+        current := entity.get_first_child();
+        while current != null {
+            tree := current.get_component(Lumber_Tree);
+            if tree == null {
+                tree = current.add_component(Lumber_Tree);
+            }
+            tree.tree_level = tree_level;
+            tree.health = tree.max_health();
+            tree.setup_tree_spine();
+            current = current.get_next_sibling();
+        }
+        configured = true;
+    }
+}
+
+spawn_log_pickup :: proc(pos: v2, player: Player, amount: s64, tier: s64) {
+    moved: s64 = 0;
+    if player != null {
+        moved = give_logs_to_backpack(player, amount);
+        if moved > 0 {
+            player.ui_pop_timer = 0.18;
+        } else {
+            spawn_float_text_for_player(player, player.entity.world_position + v2{0, 1.55}, "Backpack full", {1.0, 0.12, 0.08, 1}, true);
+            if player_local_feedback(player) {
+                play_backpack_full_dud_sfx(player.entity.world_position);
+            }
+            return;
+        }
+    }
+    if player == null return;
+    if g_log_pickup_lerps.count >= 40 {
+        g_log_pickup_lerps.unordered_remove_by_index(0);
+    }
+    p: Log_Pickup_Lerp;
+    p.owner = player;
+    p.delay = 0.38;
+    p.duration = max(0.22, 0.62 - tier.(float) * 0.045);
+    p.start_pos = pos + v2{0, 0.15};
+    p.base_scale = 0.55 + tier.(float) * 0.03;
+    p.amount = 0;
+    p.display_amount = moved;
+    g_log_pickup_lerps.append(p);
+}
+
+Log_Pickup_Lerp :: struct {
+    owner: Player;
+    age: float;
+    delay: float;
+    duration: float;
+    start_pos: v2;
+    amount: s64;
+    display_amount: s64;
+    collected: bool;
+    base_scale: float;
+}
+
+log_pickup_lerp_position :: proc(p: Log_Pickup_Lerp) -> v2 {
+    if p.owner == null || !#alive(p.owner) || !#alive(p.owner.entity) return p.start_pos;
+    if p.age < p.delay {
+        bob := sin(p.age * 14.0) * 0.12;
+        return p.start_pos + v2{0, bob};
+    }
+    t := min(1.0, (p.age - p.delay) / p.duration);
+    ease := t * t * (3.0 - 2.0 * t);
+    target := p.owner.entity.world_position + v2{0, 0.75};
+    arc := sin(t * PI) * 1.1;
+    return p.start_pos + (target - p.start_pos) * ease + v2{0, arc};
+}
+
+Chip_VFX :: struct {
+    owner: Player;
+    pos: v2;
+    velocity: v2;
+    age: float;
+    duration: float;
+    spin: float;
+    scale: float;
+    rotation: float;
+}
+
+Juice_Particle_VFX :: struct {
+    owner: Player;
+    pos: v2;
+    velocity: v2;
+    age: float;
+    duration: float;
+    spin: float;
+    gravity: float;
+    start_color: v4;
+    scale: float;
+    rotation: float;
+}
+
+Floating_Feedback :: struct {
+    owner: Player;
+    text: string;
+    color: v4;
+    age: float;
+    duration: float;
+    drift_x: float;
+    big: bool;
+    text_scale: float;
+    start_pos: v2;
+}
+
+update_world_space_feedback :: proc(dt: float) {
+    i: int = g_log_pickup_lerps.count - 1;
+    while i >= 0 {
+        p := g_log_pickup_lerps[i];
+        p.age += dt;
+        if p.owner == null || !#alive(p.owner) || !#alive(p.owner.entity) {
+            g_log_pickup_lerps.unordered_remove_by_index(i);
+            i -= 1;
+            continue;
+        }
+        t := 0.0;
+        if p.age >= p.delay {
+            t = min(1.0, (p.age - p.delay) / p.duration);
+        }
+        if t >= 1.0 && !p.collected {
+            p.collected = true;
+            moved: s64 = 0;
+            if p.amount > 0 {
+                moved = give_item(p.owner, log_defn, p.amount);
+            } else {
+                moved = 1;
+            }
+            if moved > 0 {
+                text := "+1 log";
+                if p.display_amount > 1 {
+                    text = format_string("+% logs", {p.display_amount});
+                }
+                spawn_float_text_for_player(p.owner, p.owner.entity.world_position + v2{0, 1.35}, text, {0.35, 1.0, 0.35, 1}, true);
+                p.owner.ui_pop_timer = 0.18;
+                if player_local_feedback(p.owner) {
+                    play_positional_sfx("pickup_032239.wav", p.owner.entity.world_position, 0.36, 0.08);
+                }
+            }
+            g_log_pickup_lerps.unordered_remove_by_index(i);
+            i -= 1;
+            continue;
+        }
+        g_log_pickup_lerps[i] = p;
+        i -= 1;
+    }
+
+    i = g_chip_vfx.count - 1;
+    while i >= 0 {
+        c := g_chip_vfx[i];
+        c.age += dt;
+        c.velocity.y -= 5.0 * dt;
+        c.pos += c.velocity * dt;
+        c.rotation += c.spin * dt;
+        if c.age >= c.duration {
+            g_chip_vfx.unordered_remove_by_index(i);
+            i -= 1;
+            continue;
+        }
+        g_chip_vfx[i] = c;
+        i -= 1;
+    }
+
+    i = g_juice_particle_vfx.count - 1;
+    while i >= 0 {
+        j := g_juice_particle_vfx[i];
+        j.age += dt;
+        j.velocity.y -= j.gravity * dt;
+        j.pos += j.velocity * dt;
+        j.rotation += j.spin * dt;
+        if j.age >= j.duration {
+            g_juice_particle_vfx.unordered_remove_by_index(i);
+            i -= 1;
+            continue;
+        }
+        g_juice_particle_vfx[i] = j;
+        i -= 1;
+    }
+
+    i = g_floating_feedback.count - 1;
+    while i >= 0 {
+        f := g_floating_feedback[i];
+        f.age += dt;
+        if f.age >= f.duration {
+            g_floating_feedback.unordered_remove_by_index(i);
+            i -= 1;
+            continue;
+        }
+        g_floating_feedback[i] = f;
+        i -= 1;
+    }
+}
+
+Sawmill_Blade :: class : Component {
+    ao_update :: method(dt: float) {
+        active := false;
+        for p: component_iterator(Player) {
+            if p.refining active = true;
+        }
+        if active {
+            entity.add_local_rotation(-900.0 * dt);
+        } else {
+            entity.add_local_rotation(-90.0 * dt);
+        }
+    }
+}
+
+Lumber_Sawmill :: class : Component {
+    ao_start :: method() {
+    }
+}
+
+Polishing_Machine :: class : Interactable {
+    ao_start :: method() {
+        this.set_listener(this);
+        this.set_text(format_string("Unlock %", {ALIEN_REFINER_UNLOCK_COST}));
+        this.set_hold_text("Unlock");
+        required_hold_time = 0.35;
+        radius = 2.4;
+        priority = 24;
+        apply_locked_visual(false);
+        ensure_flame_visual();
+        update_local_flame_visual();
+    }
+
+    apply_locked_visual :: method(unlocked: bool) {
+        sprite := entity.get_component(Sprite_Renderer);
+        if sprite == null return;
+        if unlocked {
+            sprite.color = {1.0, 1.0, 1.0, 1.0};
+        } else {
+            sprite.color = {1.0, 1.0, 1.0, 0.32};
+        }
+    }
+
+    refresh_local_locked_visual :: method() {
+        local_player, ok := Game.get_local_player();
+        if ok {
+            apply_locked_visual(player_has_alien_refiner(local_player));
+        }
+    }
+
+    ao_update :: method(dt: float) {
+        refresh_local_locked_visual();
+        update_local_flame_visual();
+    }
+
+    ao_on_state_sync :: method() {
+        refresh_local_locked_visual();
+        update_local_flame_visual();
+    }
+
+    ensure_flame_visual :: method() {
+        if g_alien_refiner_flame_entity != null && #alive(g_alien_refiner_flame_entity) return;
+
+        g_alien_refiner_flame_ensure_count += 1;
+        log_info("Alien refiner flame ensure/create count=% time=%", {g_alien_refiner_flame_ensure_count, format_float(get_time(), decimals=2)});
+
+        g_alien_refiner_flame_entity = Scene.create_entity();
+        g_alien_refiner_flame_entity.set_name("Alien_Refiner_Local_Flame");
+        g_alien_refiner_flame_entity.set_parent(entity, false);
+        g_alien_refiner_flame_entity.set_local_position(v2{0.35, 0.25});
+        g_alien_refiner_flame_entity.set_local_scale(v2{0.0, 0.0});
+        g_alien_refiner_flame_entity.set_local_rotation(0);
+
+        g_alien_refiner_flame_animator = g_alien_refiner_flame_entity.add_component(Spine_Animator);
+        g_alien_refiner_flame_animator.awaken();
+        g_alien_refiner_flame_animator.set_skeleton(alien_refiner_flame_spine_asset);
+        g_alien_refiner_flame_animator.set_skin("default");
+        g_alien_refiner_flame_animator.refresh_skins();
+        g_alien_refiner_flame_animator.layer = 5;
+        g_alien_refiner_flame_animator.depth_offset = -0.55;
+        g_alien_refiner_flame_animator.color_multiplier = {1.0, 1.0, 1.0, 0.0};
+        g_alien_refiner_flame_animator.set_animation(ALIEN_REFINER_FLAME_ANIM, true, 0);
+        g_alien_refiner_flame_entity.set_local_enabled(true);
+        g_alien_refiner_flame_active = false;
+    }
+
+    update_local_flame_visual :: method() {
+        local_player, ok := Game.get_local_player();
+        if !ok return;
+
+        working := local_player.alien_refiner_flame_working && player_has_alien_refiner(local_player);
+        if !working {
+            if g_alien_refiner_flame_active {
+                g_alien_refiner_flame_stop_count += 1;
+                log_info("Alien refiner flame STOP count=% time=% remaining=% total=% polishing=%", {g_alien_refiner_flame_stop_count, format_float(get_time(), decimals=2), local_player.polish_planks_remaining, local_player.polish_planks_total, local_player.polishing});
+                if g_alien_refiner_flame_animator != null {
+                    g_alien_refiner_flame_animator.color_multiplier = {1.0, 1.0, 1.0, 0.0};
+                }
+                if g_alien_refiner_flame_entity != null && #alive(g_alien_refiner_flame_entity) {
+                    g_alien_refiner_flame_entity.set_local_scale(v2{0.0, 0.0});
+                }
+                g_alien_refiner_flame_active = false;
+            }
+            return;
+        }
+
+        ensure_flame_visual();
+        if g_alien_refiner_flame_animator == null return;
+
+        if !g_alien_refiner_flame_active {
+            g_alien_refiner_flame_start_count += 1;
+            log_info("Alien refiner flame SHOW count=% time=% remaining=% total=% polishing=%", {g_alien_refiner_flame_start_count, format_float(get_time(), decimals=2), local_player.polish_planks_remaining, local_player.polish_planks_total, local_player.polishing});
+            if g_alien_refiner_flame_entity != null && #alive(g_alien_refiner_flame_entity) {
+                g_alien_refiner_flame_entity.set_local_position(v2{0.35, 0.25});
+                g_alien_refiner_flame_entity.set_local_scale(v2{1.40, 1.40});
+            }
+            g_alien_refiner_flame_animator.color_multiplier = {1.0, 1.0, 1.0, 1.0};
+            g_alien_refiner_flame_active = true;
+        }
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if player == null return false;
+        return !player_has_alien_refiner(player);
+    }
+
+    on_interact :: method(player: Player) {
+        if player == null return;
+        if player_has_alien_refiner(player) return;
+
+        if !Economy.can_withdraw_currency(player, GOLD_CURRENCY, ALIEN_REFINER_UNLOCK_COST) {
+            player.dialogue_text = format_string("Need % gold", {ALIEN_REFINER_UNLOCK_COST});
+            player.dialogue_timer = 1.5;
+            spawn_float_text_for_player(player, entity.world_position + v2{0, 1.55}, format_string("Need %", {ALIEN_REFINER_UNLOCK_COST}), {1.0, 0.22, 0.16, 1}, true);
+            if player_local_feedback(player) {
+                play_backpack_full_dud_sfx(player.entity.world_position);
+            }
+            return;
+        }
+
+        Economy.withdraw_currency(player, GOLD_CURRENCY, ALIEN_REFINER_UNLOCK_COST);
+        player.alien_refiner_unlocked = true;
+        save_player_progress(player);
+        if player_local_feedback(player) {
+            apply_locked_visual(true);
+        }
+        player.dialogue_text = "Alien refiner unlocked.";
+        player.dialogue_timer = 1.8;
+        player.ui_pop_timer = 0.25;
+        spawn_float_text_for_player(player, entity.world_position + v2{0, 1.55}, "Alien refiner", {0.42, 1.0, 0.88, 1}, true);
+        spawn_juice_particles_for_player(player, entity.world_position + v2{0, 0.75}, 3, 18, {0.42, 1.0, 0.88, 0.8}, true);
+        play_purchase_item_sfx(player);
+    }
+
+    ao_end :: method() {
+        if g_alien_refiner_flame_entity != null && #alive(g_alien_refiner_flame_entity) {
+            g_alien_refiner_flame_entity.destroy();
+        }
+        g_alien_refiner_flame_entity = null;
+        g_alien_refiner_flame_animator = null;
+        g_alien_refiner_flame_active = false;
+    }
+}
+
+Coin_Chest :: class : Interactable {
+    min_gold: s64 @ao_serialize;
+    max_gold: s64 @ao_serialize;
+    respawn_seconds: float @ao_serialize;
+    opened: bool;
+    respawn_at: float;
+    open_count: s64;
+    sprite: Sprite_Renderer;
+
+    ao_start :: method() {
+        this.set_listener(this);
+        this.set_text("Open");
+        required_hold_time = 0.12;
+        radius = 2.25;
+        priority = 22;
+        if min_gold <= 0 min_gold = 35;
+        if max_gold < min_gold max_gold = 1400;
+        if respawn_seconds <= 0 respawn_seconds = CHEST_RESPAWN_SECONDS;
+        sprite = entity.get_component(Sprite_Renderer);
+        refresh_visual();
+    }
+
+    can_use :: method(player: Player) -> bool {
+        return !opened;
+    }
+
+    on_interact :: method(player: Player) {
+        if opened return;
+        opened = true;
+        open_count += 1;
+        respawn_at = get_time() + respawn_seconds;
+        rng := rng_root_seed() + entity.id + open_count.(u64) * 7919;
+        payout := rng_range_int(ref rng, min_gold, max_gold).(s64);
+        Economy.deposit_currency(player, GOLD_CURRENCY, payout);
+        spawn_float_text(entity.world_position + v2{0, 1.2}, format_string("+% gold", {payout}), {1.0, 0.86, 0.18, 1}, true);
+        spawn_juice_particles(entity.world_position + v2{0, 0.35}, 4, 18, {1.0, 0.82, 0.18, 0.85}, true);
+        play_coin_chest_sfx(entity.world_position);
+        refresh_visual();
+    }
+
+    ao_update :: method(dt: float) {
+        if opened && get_time() >= respawn_at {
+            opened = false;
+            spawn_juice_particles(entity.world_position + v2{0, 0.35}, 2, 8, {1.0, 0.88, 0.22, 0.55}, true);
+            refresh_visual();
+        }
+    }
+
+    refresh_visual :: method() {
+        if sprite == null {
+            sprite = entity.get_component(Sprite_Renderer);
+        }
+        if sprite == null return;
+        if opened {
+            sprite.color = {0.55, 0.55, 0.55, 0.38};
+        } else {
+            sprite.color = {1, 1, 1, 1};
+        }
+    }
+}
+
+create_tree_monster_state_machine :: proc(animator: Spine_Animator) -> State_Machine {
+    sm := State_Machine.create();
+
+    is_moving := sm.create_variable("is_moving", .BOOL);
+    punch_trigger := sm.create_variable("punch", .TRIGGER);
+    terrify_trigger := sm.create_variable("terrify", .TRIGGER);
+    throw_trigger := sm.create_variable("throw", .TRIGGER);
+    trip_trigger := sm.create_variable("trip", .TRIGGER);
+
+    main := sm.create_layer("main", 0);
+    idle := main.create_state("idle", true);
+    run := main.create_state("run", true);
+    main.set_initial_state(idle);
+    idle_to_run := main.create_transition(idle, run, false);
+    idle_to_run.create_bool_condition(is_moving, true);
+    run_to_idle := main.create_transition(run, idle, false);
+    run_to_idle.create_bool_condition(is_moving, false);
+
+    action := sm.create_layer("action", 1);
+    clear := action.create_state("__CLEAR_TRACK__", false, 0.05);
+    punch := action.create_state("punch", false);
+    terrify := action.create_state("terrify", false);
+    throw := action.create_state("throw", false);
+    trip := action.create_state("trip", false);
+    action.set_initial_state(clear);
+
+    to_punch := action.create_global_transition(punch, true);
+    to_punch.create_trigger_condition(punch_trigger);
+    to_terrify := action.create_global_transition(terrify, true);
+    to_terrify.create_trigger_condition(terrify_trigger);
+    to_throw := action.create_global_transition(throw, true);
+    to_throw.create_trigger_condition(throw_trigger);
+    to_trip := action.create_global_transition(trip, true);
+    to_trip.create_trigger_condition(trip_trigger);
+
+    action.create_transition(punch, clear, true);
+    action.create_transition(terrify, clear, true);
+    action.create_transition(throw, clear, true);
+    action.create_transition(trip, clear, true);
+
+    if animator != null {
+        animator.set_state_machine(sm, true);
+    }
+    return sm;
+}
+
+Tree_Monster_Ride_Effect :: class : Effect_Base {
+    monster: Rentable_Tree_Monster;
+    visual_entity: Entity;
+    visual_animator: Spine_Animator;
+    state_machine: State_Machine;
+    visual_scale: v2;
+    last_player_pos: v2;
+    facing_left: bool;
+    bob_timer: float;
+    last_action_seen: s64;
+
+    effect_start :: method() {
+        if player == null || monster == null {
+            remove_effect(true);
+            return;
+        }
+
+        player.add_invisibility_reason(TREE_MONSTER_INVISIBILITY_REASON);
+
+        visual_entity = Scene.create_entity();
+        visual_entity.set_name("Player_Tree_Monster_Visual");
+        visual_entity.set_local_position(player.entity.world_position + TREE_MONSTER_RIDE_OFFSET);
+        visual_scale = monster.entity.local_scale;
+        if visual_scale.x == 0.0 && visual_scale.y == 0.0 {
+            visual_scale = v2{0.85, 0.85};
+        }
+        visual_entity.set_local_scale(visual_scale);
+
+        visual_animator = visual_entity.add_component(Spine_Animator);
+        visual_animator.awaken();
+        visual_animator.set_skeleton(tree_monster_spine_asset);
+        visual_animator.set_skin("Normal");
+        visual_animator.refresh_skins();
+        visual_animator.layer = 8;
+        visual_animator.depth_offset = -0.48;
+        state_machine = create_tree_monster_state_machine(visual_animator);
+        last_player_pos = player.entity.world_position;
+        last_action_seen = 0;
+    }
+
+    effect_update :: method(dt: float) {
+        if player == null || monster == null || !monster.is_rented() || monster.renter != player {
+            remove_effect(false);
+            return;
+        }
+
+        bob_timer += dt;
+        player_pos := player.entity.world_position;
+        delta := player_pos - last_player_pos;
+        moving := length_squared(delta) > 0.0004;
+        if delta.x < -0.02 {
+            facing_left = true;
+        } else if delta.x > 0.02 {
+            facing_left = false;
+        }
+        last_player_pos = player_pos;
+
+        if visual_entity != null && #alive(visual_entity) {
+            stomp_bob := 0.0;
+            if moving stomp_bob = abs(sin(bob_timer * 8.0)) * 0.05;
+            visual_entity.set_local_position(player_pos + TREE_MONSTER_RIDE_OFFSET + v2{0, stomp_bob});
+            sx := abs(visual_scale.x);
+            if facing_left sx = -sx;
+            visual_entity.set_local_scale(v2{sx, visual_scale.y});
+        }
+
+        if state_machine != null {
+            state_machine.set_bool("is_moving", moving);
+            if monster.action_stamp != last_action_seen {
+                last_action_seen = monster.action_stamp;
+                if monster.action_kind == 1 {
+                    state_machine.set_trigger("punch");
+                } else if monster.action_kind == 2 {
+                    state_machine.set_trigger("terrify");
+                } else if monster.action_kind == 3 {
+                    state_machine.set_trigger("throw");
+                } else if monster.action_kind == 4 {
+                    state_machine.set_trigger("trip");
+                }
+            }
+        }
+
+        if visual_animator != null {
+            glow := 1.0 + sin(bob_timer * 6.5) * 0.10;
+            visual_animator.color_multiplier = {glow, glow, 1.0, 1.0};
+        }
+    }
+
+    effect_end :: method(interrupt: bool) {
+        if player != null {
+            player.remove_invisibility_reason(TREE_MONSTER_INVISIBILITY_REASON);
+        }
+        if visual_entity != null && #alive(visual_entity) {
+            visual_entity.destroy();
+        }
+    }
+}
+
+start_tree_monster_effect :: proc(player: Player, monster: Rentable_Tree_Monster) {
+    if player == null || monster == null return;
+    remove_effect(player.entity, Tree_Monster_Ride_Effect, true);
+    effect := new(Tree_Monster_Ride_Effect);
+    effect.monster = monster;
+    add_passive_effect(player.entity, effect);
+}
+
+Rentable_Tree_Monster :: class : Interactable {
+    rent_cost: s64 @ao_serialize;
+    rent_seconds: float @ao_serialize;
+    smash_radius: float @ao_serialize;
+    rented_until: float;
+    next_smash_at: float;
+    renter: Player;
+    animator: Spine_Animator;
+    pad_position: v2;
+    pad_scale: v2;
+    pad_rotation: float;
+    visual_hidden: bool;
+    active_pulse: float;
+    last_renter_pos: v2;
+    facing_left: bool;
+    action_kind: s64;
+    action_stamp: s64;
+    nearby_tree_cache: [..]Lumber_Tree;
+
+    ao_start :: method() {
+        this.set_listener(this);
+        this.set_text("Rent");
+        required_hold_time = 0.25;
+        radius = 3.0;
+        priority = 34;
+        if rent_cost <= 0 rent_cost = TREE_MONSTER_RENT_COST;
+        rent_seconds = TREE_MONSTER_RENT_SECONDS;
+        if smash_radius <= 0 smash_radius = TREE_MONSTER_SMASH_RADIUS;
+        animator = entity.get_component(Spine_Animator);
+        if animator != null {
+            animator.awaken();
+            animator.set_skin("Normal");
+            animator.refresh_skins();
+            animator.set_animation("idle", true, 0);
+        }
+        pad_position = entity.local_position;
+        pad_scale = entity.local_scale;
+        pad_rotation = entity.local_rotation;
+    }
+
+    is_rented :: method() -> bool {
+        return get_time() < rented_until;
+    }
+
+    fuel_progress :: method() -> float {
+        if !is_rented() return 0.0;
+        return clamp((rented_until - get_time()) / rent_seconds, 0.0, 1.0);
+    }
+
+    can_use :: method(player: Player) -> bool {
+        return !is_rented();
+    }
+
+    on_interact :: method(player: Player) {
+        if is_rented() return;
+        if player.helicopter_rental != null && player.helicopter_rental.is_rented() {
+            player.dialogue_text = "Land first.";
+            player.dialogue_timer = 1.2;
+            play_backpack_full_dud_sfx(player.entity.world_position);
+            return;
+        }
+        if !Economy.can_withdraw_currency(player, GOLD_CURRENCY, rent_cost) {
+            player.dialogue_text = format_string("Need % gold", {rent_cost});
+            player.dialogue_timer = 1.4;
+            play_backpack_full_dud_sfx(player.entity.world_position);
+            return;
+        }
+
+        Economy.withdraw_currency(player, GOLD_CURRENCY, rent_cost);
+        renter = player;
+        player.tree_monster_rental = this;
+        rented_until = get_time() + rent_seconds;
+        next_smash_at = 0.0;
+        visual_hidden = true;
+        action_kind = 2;
+        action_stamp += 1;
+        last_renter_pos = player.entity.world_position;
+        start_tree_monster_effect(player, this);
+        player.dialogue_text = "Tree Monster!";
+        player.dialogue_timer = 1.4;
+        spawn_float_text(entity.world_position + v2{0, 1.5}, "Tree Monster!", {0.38, 1.0, 0.24, 1}, true);
+        spawn_juice_particles(entity.world_position + v2{0, 0.55}, 6, 24, {0.38, 1.0, 0.24, 0.85}, true);
+        play_tree_monster_rent_sfx(entity.world_position);
+    }
+
+    ao_update :: method(dt: float) {
+        if !is_rented() {
+            finish_rental(false);
+            renter = null;
+            return;
+        }
+        if renter == null || !#alive(renter.entity) {
+            finish_rental(false);
+            return;
+        }
+
+        renter_pos := renter.entity.world_position;
+        delta := renter_pos - last_renter_pos;
+        if delta.x < -0.02 {
+            facing_left = true;
+        } else if delta.x > 0.02 {
+            facing_left = false;
+        }
+        last_renter_pos = renter_pos;
+        entity.set_local_position(renter_pos + TREE_MONSTER_RIDE_OFFSET);
+        sx := abs(pad_scale.x);
+        if sx == 0.0 sx = 0.85;
+        if facing_left sx = -sx;
+        sy := pad_scale.y;
+        if sy == 0.0 sy = 0.85;
+        entity.set_local_scale(v2{sx, sy});
+
+        active_pulse += dt;
+        if animator == null {
+            animator = entity.get_component(Spine_Animator);
+        }
+        if animator != null {
+            glow := 1.0 + sin(active_pulse * 6.0) * 0.12;
+            if visual_hidden {
+                animator.color_multiplier = {glow, glow, 1.0, 0.0};
+            } else {
+                animator.color_multiplier = {glow, glow, 1.0, 1.0};
+            }
+        }
+
+        if get_time() < next_smash_at return;
+        next_smash_at = get_time() + TREE_MONSTER_SMASH_TICK;
+        smash_nearby_trees();
+    }
+
+    smash_nearby_trees :: method() {
+        if renter == null || !#alive(renter.entity) return;
+        query_trees_near(renter.entity.world_position, smash_radius, ref nearby_tree_cache);
+        chopped_count: s64 = 0;
+        for tree: nearby_tree_cache {
+            if tree == null continue;
+            if tree.is_cut || tree.is_falling continue;
+            if !#alive(tree.entity) continue;
+            if length_squared(tree.entity.world_position - renter.entity.world_position) > smash_radius * smash_radius continue;
+            chopped_count += 1;
+            tree.start_chop_damage(renter, 0.0, tree.max_health());
+        }
+        if chopped_count > 0 {
+            if chopped_count >= 4 {
+                action_kind = 2;
+            } else if chopped_count >= 2 {
+                action_kind = 3;
+            } else {
+                action_kind = 1;
+            }
+            action_stamp += 1;
+            spawn_juice_particles(renter.entity.world_position + v2{0, 0.65}, 5, 5 + chopped_count * 2, {0.38, 1.0, 0.24, 0.62}, true);
+            if player_local_feedback(renter) {
+                play_tree_monster_smash_sfx(renter.entity.world_position, chopped_count >= 4);
+            }
+        } else if length_squared(renter.entity.world_position - pad_position) > 36.0 {
+            action_kind = 4;
+            action_stamp += 1;
+        }
+    }
+
+    finish_rental :: method(by_player_exit: bool) {
+        if renter != null {
+            remove_effect(renter.entity, Tree_Monster_Ride_Effect, false);
+            renter.remove_invisibility_reason(TREE_MONSTER_INVISIBILITY_REASON);
+            if renter.tree_monster_rental == this renter.tree_monster_rental = null;
+            if by_player_exit {
+                renter.dialogue_text = "Monster gone.";
+                renter.dialogue_timer = 1.2;
+            }
+        }
+        rented_until = 0.0;
+        visual_hidden = false;
+        entity.set_local_position(pad_position);
+        entity.set_local_scale(pad_scale);
+        entity.set_local_rotation(pad_rotation);
+        action_kind = 0;
+        if animator != null {
+            animator.color_multiplier = {1, 1, 1, 1};
+            animator.set_animation("idle", true, 0);
+        }
+        renter = null;
+    }
+}
+
+Bacteria_Monster :: class : Component {
+    patrol_index: s64 @ao_serialize;
+    animator: Spine_Animator;
+    navmesh: Navmesh;
+    triangle_hint: s64;
+    chase_target: Player;
+    chase_until: float;
+    chase_cooldown_until: float;
+    hit_cooldown_until: float;
+    current_target: v2;
+    using_run_anim: bool;
+    facing_left: bool;
+    ambient_sound_id: u64;
+
+    ao_start :: method() {
+        animator = entity.get_component(Spine_Animator);
+        if animator == null {
+            animator = entity.add_component(Spine_Animator);
+            animator.set_skeleton(get_asset(Spine_Asset, "impostor_b44bea/impostor.spine"));
+        }
+        if animator != null {
+            animator.awaken();
+            animator.set_skin("default");
+            animator.refresh_skins();
+            animator.set_animation("idle", true, 0);
+            animator.layer = 5;
+            animator.depth_offset = -0.35;
+        }
+
+        navmesh = get_world_lumber_navmesh();
+        if patrol_index <= 0 {
+            patrol_index = (entity.id % 8).(s64) + 1;
+        }
+        current_target = bacteria_patrol_point(patrol_index);
+        current_target = closest_navmesh_point(navmesh, current_target, ref triangle_hint);
+        ensure_ambient_loop();
+    }
+
+    ao_update :: method(dt: float) {
+        ensure_ambient_loop();
+
+        if navmesh == null {
+            navmesh = get_world_lumber_navmesh();
+        }
+
+        now := get_time();
+        if chase_target == null || !#alive(chase_target) || !#alive(chase_target.entity) || now >= chase_until {
+            if chase_target != null {
+                chase_target = null;
+                chase_cooldown_until = now + BACTERIA_CHASE_COOLDOWN_SECONDS;
+                choose_next_patrol_target();
+            }
+        }
+
+        if chase_target == null && now >= chase_cooldown_until {
+            best: Player = null;
+            best_d2 := BACTERIA_CHASE_TRIGGER_RADIUS * BACTERIA_CHASE_TRIGGER_RADIUS;
+            for player: component_iterator(Player) {
+                if player == null continue;
+                if !#alive(player.entity) continue;
+                if player_helicopter_rented(player) || player_tree_monster_rented(player) continue;
+                d2 := length_squared(player.entity.world_position - entity.world_position);
+                if d2 <= best_d2 {
+                    best = player;
+                    best_d2 = d2;
+                }
+            }
+            if best != null {
+                chase_target = best;
+                chase_until = now + BACTERIA_MAX_CHASE_SECONDS;
+            }
+        }
+
+        target := current_target;
+        speed := BACTERIA_PATROL_SPEED;
+        if chase_target != null && #alive(chase_target) && #alive(chase_target.entity) {
+            target = chase_target.entity.world_position;
+            speed = BACTERIA_CHASE_SPEED;
+        }
+
+        move_toward_target(target, speed, dt);
+
+        if chase_target != null && #alive(chase_target) && #alive(chase_target.entity) {
+            if length(chase_target.entity.world_position - entity.world_position) <= BACTERIA_HIT_RADIUS && now >= hit_cooldown_until {
+                hit_cooldown_until = now + 1.0;
+                send_player_to_base(chase_target);
+                chase_target = null;
+                chase_cooldown_until = now + BACTERIA_CHASE_COOLDOWN_SECONDS;
+                choose_next_patrol_target();
+            }
+        } else if length(entity.world_position - current_target) <= BACTERIA_PATROL_POINT_RADIUS {
+            choose_next_patrol_target();
+        }
+    }
+
+    move_toward_target :: method(target: v2, speed: float, dt: float) {
+        delta := target - entity.world_position;
+        distance := length(delta);
+        moving := distance > 0.08;
+        if moving {
+            dir := delta / max(distance, 0.001);
+            step := min(distance, speed * dt);
+            next_pos := entity.local_position + dir * step;
+            next_pos = closest_navmesh_point(navmesh, next_pos, ref triangle_hint);
+            entity.set_local_position(next_pos);
+            if dir.x < -0.02 {
+                facing_left = true;
+            } else if dir.x > 0.02 {
+                facing_left = false;
+            }
+        }
+
+        sx := abs(entity.local_scale.x);
+        if sx <= 0.01 sx = 1.0;
+        sy := entity.local_scale.y;
+        if sy == 0.0 sy = 1.0;
+        if facing_left sx = -sx;
+        entity.set_local_scale(v2{sx, sy});
+
+        set_moving_animation(moving);
+    }
+
+    set_moving_animation :: method(moving: bool) {
+        if animator == null return;
+        if moving && !using_run_anim {
+            animator.set_animation("run", true, 0);
+            using_run_anim = true;
+        } else if !moving && using_run_anim {
+            animator.set_animation("idle", true, 0);
+            using_run_anim = false;
+        }
+    }
+
+    ensure_ambient_loop :: method() {
+        if ambient_sound_id != 0 return;
+
+        asset := get_asset(SFX_Asset, BACTERIA_AMBIENT_SFX);
+        desc := SFX.default_sfx_desc();
+        desc.entity_to_follow = entity.id;
+        desc.loop = true;
+        desc.volume = 0.42;
+        desc.range_multiplier = BACTERIA_AMBIENT_RANGE_MULTIPLIER;
+        desc.speed_perturb = 0.015;
+        ambient_sound_id = SFX.play(asset, desc);
+    }
+
+    stop_ambient_loop :: method() {
+        if ambient_sound_id == 0 return;
+        SFX.stop(ambient_sound_id);
+        ambient_sound_id = 0;
+    }
+
+    ao_end :: method() {
+        stop_ambient_loop();
+    }
+
+    choose_next_patrol_target :: method() {
+        patrol_index += 1;
+        if patrol_index > 8 patrol_index = 1;
+        current_target = bacteria_patrol_point(patrol_index);
+        current_target = closest_navmesh_point(navmesh, current_target, ref triangle_hint);
+    }
+}
+
+closest_navmesh_point :: proc(navmesh: Navmesh, pos: v2, triangle_hint: ref s64) -> v2 {
+    if navmesh == null return pos;
+    result := pos;
+    if navmesh.try_find_closest_point_on_navmesh(pos, ref result, ref triangle_hint) {
+        return result;
+    }
+    return pos;
+}
+
+bacteria_patrol_point :: proc(index: s64) -> v2 {
+    switch index {
+        case 1: return v2{-50, -31};
+        case 2: return v2{-48, 26};
+        case 3: return v2{-24, 34};
+        case 4: return v2{8, 32};
+        case 5: return v2{42, 30};
+        case 6: return v2{52, -6};
+        case 7: return v2{22, -34};
+        default: return v2{-18, -35};
+    }
+}
+
+draw_bacteria_tag_post_fx :: proc(player: Player) {
+    if player == null return;
+
+    remaining := max(0.0, player.bacteria_tag_flash_until - get_time());
+    t := clamp(remaining / BACTERIA_TAG_FLASH_SECONDS, 0.0, 1.0);
+    amount := t * t;
+
+    config: Post_Processing.Chromatic_Aberration_Config;
+    config.channel_offsets = v3{0.026 * amount, -0.020 * amount, 0.014 * amount};
+    config.focal_point = v2{0.5, 0.5};
+    Post_Processing.chromatic_aberration(config);
+}
+
+send_player_to_base :: proc(player: Player) {
+    if player == null || !#alive(player.entity) return;
+    player.entity.set_local_position(v2{0, 0});
+    player.dialogue_text = "Back to base!";
+    player.dialogue_timer = 1.4;
+    player.camera_shake = max(player.camera_shake, 0.18);
+    player.bacteria_tag_flash_until = get_time() + BACTERIA_TAG_FLASH_SECONDS;
+    spawn_float_text_for_player(player, player.entity.world_position + v2{0, 1.45}, "Back!", {0.55, 1.0, 0.35, 1}, true);
+    spawn_juice_particles_for_player(player, player.entity.world_position + v2{0, 0.8}, 2, 12, {0.35, 1.0, 0.35, 0.75}, true);
+    if player_local_feedback(player) {
+        play_bacteria_tag_sfx(player);
+        play_backpack_full_dud_sfx(player.entity.world_position);
+    }
+}
+
+Helicopter_Ride_Effect :: class : Effect_Base {
+    helicopter: Rentable_Helicopter;
+    visual_entity: Entity;
+    visual_animator: Spine_Animator;
+    visual_scale: v2;
+    bob_timer: float;
+    last_player_pos: v2;
+    facing_left: bool;
+    firing_visual: bool;
+
+    effect_start :: method() {
+        if player == null || helicopter == null {
+            remove_effect(true);
+            return;
+        }
+
+        player.add_invisibility_reason(HELICOPTER_INVISIBILITY_REASON);
+
+        visual_entity = Scene.create_entity();
+        visual_entity.set_name("Player_Helicopter_Visual");
+        visual_entity.set_local_position(player.entity.world_position + HELICOPTER_RIDE_OFFSET);
+        visual_scale = helicopter.entity.local_scale;
+        if visual_scale.x == 0.0 && visual_scale.y == 0.0 {
+            visual_scale = v2{0.55, 0.55};
+        }
+        visual_entity.set_local_scale(visual_scale);
+
+        visual_animator = visual_entity.add_component(Spine_Animator);
+        visual_animator.awaken();
+        visual_animator.set_skeleton(heli_spine_asset);
+        visual_animator.set_skin("default");
+        visual_animator.refresh_skins();
+        visual_animator.layer = 8;
+        visual_animator.depth_offset = -0.45;
+        visual_animator.set_animation("fly_idle", true, 0);
+        last_player_pos = player.entity.world_position;
+    }
+
+    effect_update :: method(dt: float) {
+        if player == null || helicopter == null || !helicopter.is_rented() || helicopter.renter != player {
+            remove_effect(false);
+            return;
+        }
+
+        bob_timer += dt;
+        player_pos := player.entity.world_position;
+        delta := player_pos - last_player_pos;
+        if delta.x < -0.02 {
+            facing_left = true;
+        } else if delta.x > 0.02 {
+            facing_left = false;
+        }
+        last_player_pos = player_pos;
+
+        if visual_entity != null && #alive(visual_entity) {
+            bob := sin(bob_timer * 5.5) * 0.08;
+            visual_entity.set_local_position(player_pos + HELICOPTER_RIDE_OFFSET + v2{0, bob});
+            visual_entity.set_local_rotation(sin(bob_timer * 3.0) * 2.0);
+            sx := abs(visual_scale.x);
+            if facing_left sx = -sx;
+            visual_entity.set_local_scale(v2{sx, visual_scale.y});
+        }
+
+        if visual_animator != null {
+            glow := 1.0 + sin(bob_timer * 7.0) * 0.08;
+            visual_animator.color_multiplier = {glow, glow, 1.0, 1.0};
+            should_fire := helicopter.is_firing();
+            if should_fire && !firing_visual {
+                visual_animator.set_animation("fire_minigun_aim_IK", true, 0);
+                firing_visual = true;
+            } else if !should_fire && firing_visual {
+                visual_animator.set_animation("fly_idle", true, 0);
+                firing_visual = false;
+            }
+        }
+    }
+
+    effect_end :: method(interrupt: bool) {
+        if player != null {
+            player.remove_invisibility_reason(HELICOPTER_INVISIBILITY_REASON);
+        }
+        if visual_entity != null && #alive(visual_entity) {
+            visual_entity.destroy();
+        }
+    }
+}
+
+start_helicopter_ride_effect :: proc(player: Player, helicopter: Rentable_Helicopter) {
+    if player == null || helicopter == null return;
+    remove_effect(player.entity, Helicopter_Ride_Effect, true);
+    effect := new(Helicopter_Ride_Effect);
+    effect.helicopter = helicopter;
+    add_passive_effect(player.entity, effect);
+}
+
+Rentable_Helicopter :: class : Interactable {
+    rent_cost: s64 @ao_serialize;
+    rent_seconds: float @ao_serialize;
+    clear_radius: float @ao_serialize;
+    rented_until: float;
+    next_clear_at: float;
+    loop_sound_id: u64;
+    renter: Player;
+    active_pulse: float;
+    animator: Spine_Animator;
+    pad_position: v2;
+    pad_scale: v2;
+    pad_rotation: float;
+    visual_hidden: bool;
+    firing_until: float;
+    last_renter_pos: v2;
+    facing_left: bool;
+    nearby_tree_cache: [..]Lumber_Tree;
+
+    ao_start :: method() {
+        this.set_listener(this);
+        this.set_text("Rent");
+        required_hold_time = 0.25;
+        radius = 3.0;
+        priority = 35;
+        if rent_cost <= 0 rent_cost = HELICOPTER_RENT_COST;
+        rent_seconds = HELICOPTER_RENT_SECONDS;
+        if clear_radius <= 0 clear_radius = HELICOPTER_CLEAR_RADIUS;
+        animator = entity.get_component(Spine_Animator);
+        pad_position = entity.local_position;
+        pad_scale = entity.local_scale;
+        pad_rotation = entity.local_rotation;
+    }
+
+    is_rented :: method() -> bool {
+        return get_time() < rented_until;
+    }
+
+    fuel_progress :: method() -> float {
+        if !is_rented() return 0.0;
+        return clamp((rented_until - get_time()) / rent_seconds, 0.0, 1.0);
+    }
+
+    is_firing :: method() -> bool {
+        return get_time() < firing_until;
+    }
+
+    can_use :: method(player: Player) -> bool {
+        return !is_rented();
+    }
+
+    on_interact :: method(player: Player) {
+        if is_rented() return;
+        if !Economy.can_withdraw_currency(player, GOLD_CURRENCY, rent_cost) {
+            player.dialogue_text = format_string("Need % gold", {rent_cost});
+            player.dialogue_timer = 1.4;
+            play_backpack_full_dud_sfx(player.entity.world_position);
+            return;
+        }
+
+        Economy.withdraw_currency(player, GOLD_CURRENCY, rent_cost);
+        renter = player;
+        player.helicopter_rental = this;
+        player.show_exit_helicopter_confirm = false;
+        rented_until = get_time() + rent_seconds;
+        next_clear_at = 0.0;
+        visual_hidden = true;
+        firing_until = 0.0;
+        last_renter_pos = player.entity.world_position;
+        player.helicopter_auto_fly = false;
+        start_helicopter_ride_effect(player, this);
+        player.dialogue_text = "Helicopter rented.";
+        player.dialogue_timer = 1.4;
+        spawn_float_text(entity.world_position + v2{0, 1.4}, "Fuel: 2:00", {0.9, 1.0, 0.32, 1}, true);
+        spawn_juice_particles(entity.world_position + v2{0, 0.6}, 5, 22, {1.0, 0.92, 0.24, 0.85}, true);
+        play_helicopter_rent_sfx(entity.world_position);
+    }
+
+    ao_update :: method(dt: float) {
+        if !is_rented() {
+            finish_rental(false);
+            renter = null;
+            stop_rotor_loop();
+            return;
+        }
+        if renter == null || !#alive(renter.entity) {
+            finish_rental(false);
+            return;
+        }
+        ensure_rotor_loop();
+        renter_pos := renter.entity.world_position;
+        delta := renter_pos - last_renter_pos;
+        if delta.x < -0.02 {
+            facing_left = true;
+        } else if delta.x > 0.02 {
+            facing_left = false;
+        }
+        last_renter_pos = renter_pos;
+        entity.set_local_position(renter_pos + HELICOPTER_RIDE_OFFSET);
+        sx := abs(pad_scale.x);
+        if facing_left sx = -sx;
+        entity.set_local_scale(v2{sx, pad_scale.y});
+
+        active_pulse += dt;
+        if animator == null {
+            animator = entity.get_component(Spine_Animator);
+        }
+        if animator != null {
+            glow := 1.0 + sin(active_pulse * 8.0) * 0.12;
+            if visual_hidden {
+                animator.color_multiplier = {glow, glow, 1.0, 0.0};
+            } else {
+                animator.color_multiplier = {glow, glow, 1.0, 1.0};
+            }
+        }
+
+        if get_time() < next_clear_at return;
+        next_clear_at = get_time() + HELICOPTER_CLEAR_TICK;
+        clear_trees_below();
+    }
+
+    clear_trees_below :: method() {
+        if renter == null || !#alive(renter.entity) return;
+        query_trees_near(renter.entity.world_position, clear_radius, ref nearby_tree_cache);
+        chopped_any := false;
+        for tree: nearby_tree_cache {
+            if tree == null continue;
+            if tree.is_cut || tree.is_falling continue;
+            if tree.tree_level > 3 continue;
+            if !#alive(tree.entity) continue;
+            if length_squared(tree.entity.world_position - renter.entity.world_position) > clear_radius * clear_radius continue;
+            chopped_any = true;
+            tree.start_chop_damage(renter, 0.0, tree.max_health());
+        }
+        if chopped_any {
+            firing_until = get_time() + 0.35;
+            if animator != null {
+                animator.set_animation("fire_minigun_aim_IK", true, 0);
+            }
+        } else if !is_firing() && animator != null {
+            animator.set_animation("fly_idle", true, 0);
+        }
+    }
+
+    finish_rental :: method(by_player_exit: bool) {
+        if renter != null {
+            remove_effect(renter.entity, Helicopter_Ride_Effect, false);
+            renter.remove_invisibility_reason(HELICOPTER_INVISIBILITY_REASON);
+            if renter.helicopter_rental == this renter.helicopter_rental = null;
+            renter.show_exit_helicopter_confirm = false;
+            renter.helicopter_auto_fly = false;
+            if by_player_exit {
+                renter.dialogue_text = "Helicopter returned.";
+                renter.dialogue_timer = 1.2;
+            }
+        }
+        rented_until = 0.0;
+        visual_hidden = false;
+        entity.set_local_position(pad_position);
+        entity.set_local_scale(pad_scale);
+        entity.set_local_rotation(pad_rotation);
+        if animator != null {
+            animator.color_multiplier = {1, 1, 1, 1};
+        }
+        stop_rotor_loop();
+        renter = null;
+    }
+
+    ensure_rotor_loop :: method() {
+        if loop_sound_id != 0 return;
+        asset := get_asset(SFX_Asset, "sfx/heli-loop.wav");
+        desc := SFX.default_sfx_desc();
+        desc.entity_to_follow = entity.id;
+        desc.loop = true;
+        desc.volume = 0.54;
+        desc.speed_perturb = 0.02;
+        loop_sound_id = SFX.play(asset, desc);
+    }
+
+    stop_rotor_loop :: method() {
+        if loop_sound_id == 0 return;
+        SFX.stop(loop_sound_id);
+        loop_sound_id = 0;
+    }
+
+    ao_end :: method() {
+        stop_rotor_loop();
+    }
+}
+
+Plank_Seller :: class : Component {
+    ao_start :: method() {
+    }
+}
+
+Axe_Shop_NPC :: class : Interactable {
+    ao_start :: method() {
+        this.set_listener(this);
+        this.set_text("Axes");
+        required_hold_time = 0.1;
+        radius = 2.4;
+        priority = 25;
+    }
+
+    can_use :: method(player: Player) -> bool {
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        was_open := player.show_upgrades_menu;
+        player.show_upgrades_menu = true;
+        player.dialogue_text = "Pick an upgrade.";
+        player.dialogue_timer = 2.0;
+        if !was_open play_upgrade_menu_open_sfx(player);
+    }
+}
+
+draw_lumber_inventory :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    if player.default_inventory == null return;
+    options := Inventory_Draw_Options.default();
+    options.hotbar_item_count = 4;
+    options.enable_selection = true;
+    options.scroll_item_selection = true;
+    options.keyboard_item_selection = true;
+    Items.draw_hotbar(player, player.default_inventory, options);
+}
+
+stats_hud_rect :: proc() -> Rect {
+    return UI.get_safe_screen_rect().bottom_left_rect().grow_top(102).grow_right(589).offset(12, 12);
+}
+
+draw_lumber_topbar :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    UIK.begin(UIK.window(stats_hud_rect()));
+    shell := UIK.panel_modal(.BROWN, 8, v4{12, 8, 12, 8});
+    shell.gap = 8;
+    UIK.panel_begin(shell);
+
+    row := UIK.layout_row(UIK.flex(1), UIK.fit(), 12);
+    UIK.panel_begin(row);
+
+    coin_icon := get_asset(Texture_Asset, "$AO/ui/kit/Icons/coin/coin_icon_b.png");
+    money_box := UIK.panel_interior(.INSET);
+    money_box.width = UIK.flex(1);
+    money_box.height = UIK.pixels(56);
+    money_box.padding = v4{8, 8, 8, 8};
+    UIK.panel_begin(money_box);
+    UIK.currency(coin_icon, Economy.get_balance(player, GOLD_CURRENCY), UIK.text_title());
+    UIK.panel_end();
+
+    backpack_full := count_item(player, log_defn) >= effective_backpack_capacity(player);
+    near_home := length(player.entity.local_position) <= 10.0;
+
+    home_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_YELLOW1);
+    if backpack_full && !near_home {
+        home_bd = UIK.widget_desc_button_auto_default(.BUTTON_BASIC_WHITE);
+        home_pulse := sin(get_time() * 4.8) * 0.5 + 0.5;
+        home_green := lerp(0.68, 1.0, home_pulse);
+        home_blue := lerp(0.05, 0.45, home_pulse);
+        home_bd.panel.tint = {1.0, home_green, home_blue, 1.0};
+    }
+    home_bd.panel.width = UIK.pixels(120);
+    home_bd.panel.height = UIK.pixels(56);
+    home_handle := UIK.button("go_home", "Home", home_bd);
+
+    bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+    upgrade_label := "Upgrades";
+    if can_afford_any_upgrade(player) {
+        bd = UIK.widget_desc_button_auto_default(.BUTTON_BASIC_WHITE);
+        pulse := sin(get_time() * 3.2) * 0.5 + 0.5;
+        red := lerp(0.46, 1.0, pulse);
+        green := lerp(0.86, 1.0, pulse);
+        blue := lerp(0.04, 1.0, pulse);
+        bd.panel.tint = {red, green, blue, 1.0};
+    }
+    bd.panel.width = UIK.pixels(190);
+    bd.panel.height = UIK.pixels(56);
+    upgrades_handle := UIK.button("open_sawmill_upgrades", upgrade_label, bd);
+
+    UIK.panel_end();
+    UIK.panel_end();
+    UIK.end();
+
+    if UIK.clicked(upgrades_handle) {
+        was_open := player.show_upgrades_menu;
+        player.show_upgrades_menu = true;
+        if !was_open play_upgrade_menu_open_sfx(player);
+    }
+
+    if UIK.clicked(home_handle) {
+        player.entity.set_local_position(v2{0, 0});
+        player.dialogue_text = "Home";
+        player.dialogue_timer = 0.8;
+        if player.is_local() {
+            play_ui_sfx("click_6d65ee.wav", 0.14, 0.02);
+        }
+    }
+}
+
+draw_global_top_message :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+
+    message := Save.get_game_string(GLOBAL_TOP_MESSAGE_SAVE_KEY, "");
+    if message.count <= 0 return;
+
+    UIK.begin(UIK.window(UIK.rect_topbar()));
+    shell := UIK.panel_modal(.BLACK, 8, v4{12, 12, 12, 12});
+    shell.gap = 0;
+    UIK.panel_begin(shell);
+
+    row := UIK.layout_row(UIK.flex(1), UIK.flex(1), 8);
+    UIK.panel_begin(row);
+    UIK.spacer(UIK.flex(1), UIK.pixels(1));
+    UIK.text(message, UIK.text_title());
+    UIK.spacer(UIK.flex(1), UIK.pixels(1));
+    UIK.panel_end();
+
+    UIK.panel_end();
+    UIK.end();
+}
+
+draw_lumber_world_overlays :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    draw_sawmill_progress_bar(player);
+    draw_polishing_progress_bar(player);
+    draw_helicopter_fuel_bars();
+    draw_tree_monster_timer_bars();
+    draw_vendor_world_labels();
+    draw_recent_tree_health_bars(player);
+
+    if !should_draw_goal_arrow(player) {
+        draw_world_space_feedback();
+        return;
+    }
+
+    target := find_goal_position(player);
+    options := Tutorial_Arrow.default_options();
+    options.alpha = 0.85;
+    options.far = true;
+    options.near = true;
+    options.bob_scale = 0.5;
+    Tutorial_Arrow.draw(player, target, options);
+
+    draw_world_space_feedback();
+
+    if player.swing_timer > 0 {
+        dir := normalize(target - player.entity.world_position);
+        if length_squared(dir) < 0.1 dir = v2{1, 0};
+        start := player.entity.world_position + v2{0, 0.4};
+        end := start + dir * (1.1 + player.axe_tier.(float) * 0.18);
+        UI.wire_box(end - v2{0.25, 0.25}, end + v2{0.25, 0.25}, 0.06, {1.0, 0.86, 0.22, min(1.0, player.swing_timer * 4.0)});
+    }
+}
+
+draw_recent_tree_health_bars :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+
+    now := get_time();
+    query_trees_near(player.entity.world_position, 9.0, ref player.nearby_tree_cache);
+    for tree: player.nearby_tree_cache {
+        if tree == null continue;
+        if tree.health_bar_until <= now continue;
+        if tree.is_cut continue;
+        if tree.will_fall && tree.health <= 0 continue;
+        if tree.health_bar_player != null {
+            if !#alive(tree.health_bar_player) continue;
+        }
+        if length(tree.entity.world_position - player.entity.world_position) > 9.0 continue;
+
+        tree_health := max(1, tree.max_health());
+        progress := clamp(tree.health.(float) / tree_health.(float), 0.0, 1.0);
+        bar_pos := world_to_screen(tree.entity.world_position + v2{0, 1.65});
+        width := 76.0 + tree.tree_level.(float) * 8.0;
+        height := 10.0;
+        half := v2{width * 0.5, height * 0.5};
+        bg_rect := Rect{min=bar_pos - half, max=bar_pos + half};
+        fill_width := max(2.0, width * progress);
+        fill_rect := Rect{min=bg_rect.min + v2{2, 2}, max=bg_rect.min + v2{fill_width - 2.0, height - 2.0}};
+        UI.quad(bg_rect.grow(3), core_globals.white_sprite, {0.04, 0.02, 0.0, 0.74});
+        if now < tree.health_bar_flash_until {
+            UI.quad(bg_rect, core_globals.white_sprite, {1.0, 1.0, 1.0, 0.96});
+            UI.quad(fill_rect, core_globals.white_sprite, {1.0, 1.0, 1.0, 1.0});
+        } else {
+            UI.quad(bg_rect, core_globals.white_sprite, {0.22, 0.05, 0.02, 0.92});
+            UI.quad(fill_rect, core_globals.white_sprite, {0.28, 1.0, 0.24, 0.96});
+        }
+    }
+}
+
+draw_helicopter_fuel_bars :: proc() {
+    for heli: component_iterator(Rentable_Helicopter) {
+        if !heli.is_rented() {
+            spawn_text_world_scaled(heli.entity.world_position + v2{0, 1.6}, format_string("Rent %", {HELICOPTER_RENT_COST}), {1.0, 0.90, 0.25, 1}, 1.15);
+            continue;
+        }
+
+        progress := heli.fuel_progress();
+        options := World_Progress_Bar.default_options();
+        options.y_bias = 1.0;
+        options.width = 1.85;
+        options.height = 0.18;
+        options.scale = 1.0;
+        World_Progress_Bar.draw(heli.entity.world_position + v2{0, 1.75}, progress, options);
+        remaining := max(0, (heli.rented_until - get_time()).(s64));
+        minutes := remaining / 60;
+        seconds := remaining - minutes * 60;
+        spawn_text_world_scaled(heli.entity.world_position + v2{0, 2.05}, format_string("Fuel %:%", {minutes, format_int(seconds, leading_zeroes=2)}), {0.9, 1.0, 0.32, 1}, 0.95);
+    }
+}
+
+draw_tree_monster_timer_bars :: proc() {
+    for monster: component_iterator(Rentable_Tree_Monster) {
+        if !monster.is_rented() {
+            spawn_text_world_scaled(monster.entity.world_position + v2{0, 1.75}, format_string("Rent %", {TREE_MONSTER_RENT_COST}), {0.55, 1.0, 0.32, 1}, 1.12);
+            continue;
+        }
+
+        progress := monster.fuel_progress();
+        options := World_Progress_Bar.default_options();
+        options.y_bias = 1.0;
+        options.width = 1.85;
+        options.height = 0.18;
+        options.scale = 1.0;
+        World_Progress_Bar.draw(monster.entity.world_position + v2{0, 1.95}, progress, options);
+        remaining := max(0, (monster.rented_until - get_time()).(s64));
+        spawn_text_world_scaled(monster.entity.world_position + v2{0, 2.25}, format_string("Monster %", {remaining}), {0.55, 1.0, 0.32, 1}, 0.95);
+    }
+}
+
+draw_exit_helicopter_confirm :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    if !player_helicopter_rented(player) {
+        player.show_exit_helicopter_confirm = false;
+        return;
+    }
+
+    UIK.begin(UIK.modal(UIK.rect_window_small(), 25));
+
+    shell := UIK.panel_modal(.BROWN, 10, v4{16, 16, 16, 16});
+    shell.gap = 12;
+    UIK.panel_begin(shell);
+
+    title_desc := UIK.title_area_desc("Exit Heli?");
+    title_desc.style = .NONE;
+    exit_handle := UIK.title_area(title_desc);
+
+    UIK.spacer(UIK.pixels(1), UIK.flex(0.25));
+    UIK.text("End the rental now?", UIK.text_title());
+    UIK.text("No refund.", UIK.text_body());
+    UIK.spacer(UIK.pixels(1), UIK.flex(1));
+
+    row := UIK.layout_row(UIK.flex(1), UIK.fit(), 16);
+    UIK.panel_begin(row);
+
+    cancel_desc := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    cancel_desc.panel.width = UIK.flex(1);
+    cancel_desc.panel.height = UIK.pixels(82);
+    cancel_btn := UIK.button("heli_exit_cancel", "Keep", cancel_desc);
+
+    confirm_desc := UIK.widget_desc_button_default(.BUTTON_BASIC_RED);
+    confirm_desc.panel.width = UIK.flex(1);
+    confirm_desc.panel.height = UIK.pixels(82);
+    confirm_btn := UIK.button("heli_exit_confirm", "Exit", confirm_desc);
+
+    UIK.panel_end();
+    UIK.panel_end();
+    UIK.end();
+
+    if UIK.clicked(exit_handle) || UIK.clicked(cancel_btn) {
+        player.show_exit_helicopter_confirm = false;
+        if player.is_local() play_ui_sfx("click_6d65ee.wav", 0.16, 0.02);
+    }
+    if UIK.clicked(confirm_btn) {
+        heli := player.helicopter_rental;
+        if heli != null && #alive(heli) {
+            heli.finish_rental(true);
+        } else {
+            player.show_exit_helicopter_confirm = false;
+        }
+        if player.is_local() play_ui_sfx("click_6d65ee.wav", 0.18, 0.02);
+    }
+}
+
+draw_vendor_world_labels :: proc() {
+    for sawmill: component_iterator(Lumber_Sawmill) {
+        pos := sawmill.entity.world_position;
+        spawn_text_world_scaled(pos + v2{0, 1.575}, "Refine", {0.95, 0.82, 0.36, 1}, 1.32);
+    }
+
+    for polisher: component_iterator(Polishing_Machine) {
+        pos := polisher.entity.world_position;
+        spawn_text_world_scaled(pos + v2{0, 1.575}, "Polish", {0.78, 0.25, 1.0, 1}, 1.32);
+    }
+
+    for seller: component_iterator(Plank_Seller) {
+        pos := seller.entity.world_position;
+        spawn_text_world_scaled(pos + v2{0, 1.85}, "Sell", {1.0, 0.92, 0.25, 1}, 1.32);
+    }
+
+    for shop: component_iterator(Axe_Shop_NPC) {
+        spawn_text_world_scaled(shop.entity.world_position + v2{0, 1.85}, "Upgrade", {0.55, 1.0, 0.45, 1}, 1.52);
+    }
+}
+
+draw_sawmill_progress_bar :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    progress := 0.0;
+    should_draw := false;
+    if player.refining {
+        progress = clamp(player.refine_timer / sawmill_process_time(player.sawmill_tier), 0.0, 1.0);
+        should_draw = true;
+    } else if player_has_auto_sawmill(player) && count_item(player, log_defn) > 0 {
+        progress = clamp(player.auto_refine_timer / sawmill_auto_process_time(player.sawmill_tier), 0.0, 1.0);
+        should_draw = progress > 0.02;
+    }
+    if !should_draw return;
+
+    for sawmill: component_iterator(Lumber_Sawmill) {
+        options := World_Progress_Bar.default_options();
+        options.y_bias = 1.0;
+        options.width = 1.65;
+        options.height = 0.16;
+        options.scale = 1.0;
+        World_Progress_Bar.draw(sawmill.entity.world_position + v2{0, 1.85}, progress, options);
+        if player.refining && player.refine_logs_total > 0 {
+            processed := clamp(player.refine_logs_total - player.refine_logs_remaining, 0, player.refine_logs_total);
+            spawn_text_world_scaled(sawmill.entity.world_position + v2{0, 2.12}, format_string("%/%", {processed, player.refine_logs_total}), {0.95, 0.82, 0.36, 1}, 1.08);
+        }
+    }
+}
+
+draw_polishing_progress_bar :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    if !player.polishing return;
+
+    progress := clamp(player.polish_timer / polishing_process_time(player.sawmill_tier), 0.0, 1.0);
+    for polisher: component_iterator(Polishing_Machine) {
+        options := World_Progress_Bar.default_options();
+        options.y_bias = 1.0;
+        options.width = 1.65;
+        options.height = 0.16;
+        options.scale = 1.0;
+        World_Progress_Bar.draw(polisher.entity.world_position + v2{0, 1.85}, progress, options);
+        if player.polish_planks_total > 0 {
+            processed := clamp(player.polish_planks_total - player.polish_planks_remaining, 0, player.polish_planks_total);
+            spawn_text_world_scaled(polisher.entity.world_position + v2{0, 2.12}, format_string("%/%", {processed, player.polish_planks_total}), {0.42, 1.0, 0.88, 1}, 1.08);
+        }
+    }
+}
+
+spawn_text_world :: proc(pos: v2, text: string, color: v4) {
+    spawn_text_world_scaled(pos, text, color, 1.0);
+}
+
+spawn_text_world_scaled :: proc(pos: v2, text: string, color: v4, scale: float) {
+    screen := world_to_screen(pos);
+    rect := Rect{min=screen + v2{-130.0 * scale, -24.0 * scale}, max=screen + v2{130.0 * scale, 24.0 * scale}};
+    ts := UI.default_text_settings();
+    ts.size = 26.0 * scale;
+    ts.color = color;
+    ts.outline_thickness = 2.0 * scale;
+    ts.outline_color = {0.08, 0.04, 0.0, 0.9};
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    UI.text(rect, ts, text);
+}
+
+draw_floating_feedback :: proc(f: Floating_Feedback) {
+    t := min(1.0, f.age / f.duration);
+    pos := f.start_pos + v2{f.drift_x * t, t * 1.2 + sin(t * PI) * 0.4};
+    screen := world_to_screen(pos);
+    scale := lerp(1.15, 0.75, t) + max(0.0, 1.0 - t / 0.2) * 0.35;
+    if f.big scale += 0.18;
+    if f.text_scale > 0.0 scale *= f.text_scale;
+    rect := Rect{min=screen + v2{-110.0 * scale, -30.0 * scale}, max=screen + v2{110.0 * scale, 30.0 * scale}};
+    ts := UI.default_text_settings();
+    ts.size = 32.0 * scale;
+    ts.color = v4{f.color.x, f.color.y, f.color.z, 1.0 - max(0.0, (t - 0.65) / 0.35)};
+    ts.outline_thickness = 2.0;
+    ts.outline_color = {0, 0, 0, ts.color.w};
+    ts.halign = .CENTER;
+    ts.valign = .CENTER;
+    UI.text(rect, ts, f.text);
+}
+
+draw_world_ui_quad :: proc(pos: v2, texture: Texture_Asset, size: float, rotation: float, color: v4) {
+    screen := world_to_screen(pos);
+    half := v2{size * 0.5, size * 0.5};
+    rect := Rect{min=screen - half, max=screen + half};
+    UI.push_matrix(Matrix4.rotate_about_point(rect.center(), rotation));
+    UI.quad(rect, texture, color);
+    UI.pop_matrix();
+}
+
+draw_world_space_feedback :: proc() {
+    frame := get_frame_number();
+    if g_world_feedback_draw_frame == frame return;
+    g_world_feedback_draw_frame = frame;
+
+    if g_chip_vfx.count > 0 {
+        for i: 0..g_chip_vfx.count - 1 {
+            c := g_chip_vfx[i];
+            if !should_draw_feedback_owner(c.owner) continue;
+            t := min(1.0, c.age / c.duration);
+            alpha := 1.0 - max(0.0, (t - 0.62) / 0.38);
+            draw_world_ui_quad(c.pos, wood_chips_texture, 120.0 * c.scale, c.rotation, {1, 1, 1, alpha});
+        }
+    }
+
+    if g_juice_particle_vfx.count > 0 {
+        for i: 0..g_juice_particle_vfx.count - 1 {
+            j := g_juice_particle_vfx[i];
+            if !should_draw_feedback_owner(j.owner) continue;
+            t := min(1.0, j.age / j.duration);
+            shrink := max(0.05, 1.0 - t * 0.55);
+            color := v4{j.start_color.x, j.start_color.y, j.start_color.z, j.start_color.w * (1.0 - t)};
+            draw_world_ui_quad(j.pos, wood_chips_texture, 120.0 * j.scale * shrink, j.rotation, color);
+        }
+    }
+
+    if g_log_pickup_lerps.count > 0 {
+        for i: 0..g_log_pickup_lerps.count - 1 {
+            p := g_log_pickup_lerps[i];
+            if p.owner == null || !#alive(p.owner) || !#alive(p.owner.entity) continue;
+            if !should_draw_feedback_owner(p.owner) continue;
+            t := 0.0;
+            if p.age >= p.delay {
+                t = min(1.0, (p.age - p.delay) / p.duration);
+            }
+            pop := 1.0 + sin(t * PI) * 0.35;
+            draw_world_ui_quad(log_pickup_lerp_position(p), wood_logs_texture, 86.0 * p.base_scale * pop, 0, {1, 1, 1, 1});
+        }
+    }
+
+    if g_floating_feedback.count > 0 {
+        for i: 0..g_floating_feedback.count - 1 {
+            f := g_floating_feedback[i];
+            if !should_draw_feedback_owner(f.owner) continue;
+            draw_floating_feedback(f);
+        }
+    }
+}
+
+draw_axe_upgrade_shop :: proc(player: Player) {
+    UIK.begin(UIK.modal(UIK.rect_window(), 15));
+    shell := UIK.panel_modal(.BROWN, 10, v4{16, 16, 16, 16});
+    UIK.panel_begin(shell);
+    exit_handle := UIK.title_area(UIK.title_area_desc("Axe Upgrades"));
+
+    icon := get_asset(Texture_Asset, "icon_axe_006f01.png");
+    row := UIK.layout_row(UIK.flex(1), UIK.fit(), 14);
+    UIK.panel_begin(row);
+    box := UIK.layout_centered(UIK.pixels(130), UIK.pixels(130));
+    UIK.panel_begin(box);
+    UIK.image_fitted(icon, UIK.image_desc(.CONTAIN), axe_tier_color(player.axe_tier));
+    UIK.panel_end();
+
+    col := UIK.layout_column();
+    col.width = UIK.flex(1);
+    col.height = UIK.fit();
+    col.gap = 8;
+    UIK.panel_begin(col);
+    UIK.text(format_string("Tier: %", {player.axe_tier}), UIK.text_title());
+    UIK.text(format_string("Axe: %", {axe_tier_name(player.axe_tier)}), UIK.text_body());
+    UIK.text(format_string("Damage: %", {axe_damage(player.axe_tier)}), UIK.text_body());
+    UIK.text(format_string("Hits per tree: %", {axe_hits_to_chop(player.axe_tier)}), UIK.text_body());
+    UIK.text(format_string("Radius: %", {format_float(axe_chop_radius(player.axe_tier), decimals=1)}), UIK.text_body());
+    if player.axe_tier > 1 {
+        UIK.text(format_string("Previous: % damage, % hits, radius %", {axe_damage(player.axe_tier - 1), axe_hits_to_chop(player.axe_tier - 1), format_float(axe_chop_radius(player.axe_tier - 1), decimals=1)}), UIK.text_body());
+    }
+    if player.axe_tier < MAX_AXE_TIER {
+        UIK.text(format_string("Next: % damage, % hits, radius %", {axe_damage(player.axe_tier + 1), axe_hits_to_chop(player.axe_tier + 1), format_float(axe_chop_radius(player.axe_tier + 1), decimals=1)}), UIK.text_body());
+    }
+    UIK.panel_end();
+    UIK.panel_end();
+
+    buy_handle: UIK.Interact_Handle;
+    can_buy := false;
+    if player.axe_tier < MAX_AXE_TIER {
+        cost := axe_upgrade_cost(player.axe_tier);
+        can_buy = Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost);
+        UIK.text(format_string("Cost: % Gold", {cost}), UIK.text_title());
+        bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+        bd.panel.width = UIK.flex(1);
+        bd.panel.height = UIK.pixels(90);
+        label := "Upgrade";
+        if !can_buy {
+            label = format_string("Need % Gold", {cost});
+            bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+            bd.panel.width = UIK.flex(1);
+            bd.panel.height = UIK.pixels(90);
+        }
+        buy_handle = UIK.button("axe_upgrade_buy", label, bd);
+    } else {
+        UIK.text("Maximum tier reached", UIK.text_title());
+    }
+
+    UIK.panel_end();
+    UIK.end();
+
+    if UIK.clicked(exit_handle) {
+        player.show_upgrade_shop = false;
+    }
+    if player.axe_tier < MAX_AXE_TIER && buy_handle.generation > 0 && UIK.clicked(buy_handle) {
+        cost := axe_upgrade_cost(player.axe_tier);
+        if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
+            Economy.withdraw_currency(player, GOLD_CURRENCY, cost);
+            player.axe_tier += 1;
+            save_player_progress(player);
+            player.dialogue_text = "Sharper. Wider. Faster.";
+            player.dialogue_timer = 2.0;
+            player.ui_pop_timer = 0.3;
+            spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("Tier: %", {player.axe_tier}), axe_tier_color(player.axe_tier), true);
+            spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, player.axe_tier, 18, axe_tier_color(player.axe_tier), true);
+            play_upgrade_sfx(player, AXE_UPGRADE_SFX);
+        } else {
+            player.dialogue_text = "Bring more gold.";
+            player.dialogue_timer = 1.8;
+        }
+    }
+}
+
+draw_upgrades_menu :: proc(player: Player) {
+    UIK.begin(UIK.modal(UIK.rect_window(), 15));
+    shell := UIK.panel_modal(.BROWN, 10, v4{16, 16, 16, 16});
+    shell.gap = 8;
+    UIK.panel_begin(shell);
+    exit_handle := UIK.title_area(UIK.title_area_desc("Upgrades"));
+
+    backpack_handle: UIK.Interact_Handle;
+    axe_handle: UIK.Interact_Handle;
+    sawmill_handle: UIK.Interact_Handle;
+    auto_handle: UIK.Interact_Handle;
+    unlimited_backpack_handle: UIK.Interact_Handle;
+    unlimited_speed_handle: UIK.Interact_Handle;
+
+    backpack_icon := get_asset(Texture_Asset, "$AO/ui/kit/Icons/backpacks/backpack_closed_med.png");
+    axe_icon := get_asset(Texture_Asset, "icon_axe_006f01.png");
+    saw_icon := get_asset(Texture_Asset, "Sawmill_cc8b36.png");
+    gold := Economy.get_balance(player, GOLD_CURRENCY);
+
+    axe_row := UIK.panel_interior(.INSET);
+    axe_row.width = UIK.flex(1);
+    axe_row.height = UIK.pixels(106);
+    axe_row.padding = v4{10, 10, 10, 10};
+    axe_row.gap = 12;
+    UIK.panel_begin(axe_row);
+    axe_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(axe_layout);
+    axe_icon_box := UIK.layout_centered(UIK.pixels(70), UIK.pixels(70));
+    UIK.panel_begin(axe_icon_box);
+    UIK.image_fitted(axe_icon, UIK.image_desc(.CONTAIN), axe_tier_color(player.axe_tier));
+    UIK.panel_end();
+    axe_col := UIK.layout_column();
+    axe_col.width = UIK.flex(1);
+    axe_col.height = UIK.flex(1);
+    axe_col.gap = 2;
+    UIK.panel_begin(axe_col);
+    UIK.text(format_string("Axe Tier %", {player.axe_tier}), UIK.text_title());
+    if player.axe_tier < MAX_AXE_TIER {
+        UIK.text(format_string("Damage % -> %", {axe_damage(player.axe_tier), axe_damage(player.axe_tier + 1)}), UIK.text_body());
+        UIK.text(format_string("Tree hits % -> %, reach % -> %", {axe_hits_to_chop(player.axe_tier), axe_hits_to_chop(player.axe_tier + 1), format_float(axe_chop_radius(player.axe_tier), decimals=1), format_float(axe_chop_radius(player.axe_tier + 1), decimals=1)}), UIK.text_body());
+    } else {
+        UIK.text(format_string("Damage %, tree hits %, reach %", {axe_damage(player.axe_tier), axe_hits_to_chop(player.axe_tier), format_float(axe_chop_radius(player.axe_tier), decimals=1)}), UIK.text_body());
+        UIK.text("Maximum tier reached", UIK.text_body());
+    }
+    UIK.panel_end();
+    axe_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    axe_bd.panel.width = UIK.pixels(289);
+    axe_bd.panel.height = UIK.pixels(70);
+    axe_label := "Maximum";
+    if player.axe_tier >= MAX_AXE_TIER {
+        axe_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        axe_bd.panel.width = UIK.pixels(289);
+        axe_bd.panel.height = UIK.pixels(70);
+    }
+    if player.axe_tier < MAX_AXE_TIER {
+        cost := axe_upgrade_cost(player.axe_tier);
+        axe_label = format_string("Buy % Gold", {cost});
+        if gold < cost {
+            axe_label = format_string("Need % Gold", {cost});
+            axe_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+            axe_bd.panel.width = UIK.pixels(289);
+            axe_bd.panel.height = UIK.pixels(70);
+        }
+    }
+    axe_handle = UIK.button("axe_upgrade_buy_menu", axe_label, axe_bd);
+    UIK.panel_end();
+    UIK.panel_end();
+
+    backpack_row := UIK.panel_interior(.INSET);
+    backpack_row.width = UIK.flex(1);
+    backpack_row.height = UIK.pixels(104);
+    backpack_row.padding = v4{10, 10, 10, 10};
+    backpack_row.gap = 12;
+    UIK.panel_begin(backpack_row);
+    row := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(row);
+    icon_box := UIK.layout_centered(UIK.pixels(70), UIK.pixels(70));
+    UIK.panel_begin(icon_box);
+    UIK.image_fitted(backpack_icon, UIK.image_desc(.CONTAIN), {1, 1, 1, 1});
+    UIK.panel_end();
+    col := UIK.layout_column();
+    col.width = UIK.flex(1);
+    col.height = UIK.flex(1);
+    col.gap = 2;
+    UIK.panel_begin(col);
+    UIK.text(format_string("Backpack Tier %", {player.backpack_tier}), UIK.text_title());
+    if player.infinite_backpack || player_has_unlimited_backpack(player) {
+        UIK.text("Carrying capacity Infinite", UIK.text_body());
+    } else if player.backpack_tier < MAX_BACKPACK_TIER {
+        UIK.text(format_string("Carrying capacity % -> %", {backpack_capacity(player.backpack_tier), backpack_capacity(player.backpack_tier + 1)}), UIK.text_body());
+    } else {
+        UIK.text(format_string("Carrying capacity %", {backpack_capacity(player.backpack_tier)}), UIK.text_body());
+        UIK.text("Maximum tier reached", UIK.text_body());
+    }
+    UIK.panel_end();
+    backpack_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    backpack_bd.panel.width = UIK.pixels(289);
+    backpack_bd.panel.height = UIK.pixels(70);
+    backpack_label := "Maximum";
+    if player.backpack_tier >= MAX_BACKPACK_TIER {
+        backpack_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        backpack_bd.panel.width = UIK.pixels(289);
+        backpack_bd.panel.height = UIK.pixels(70);
+    }
+    if player.backpack_tier < MAX_BACKPACK_TIER {
+        cost := backpack_upgrade_cost(player.backpack_tier);
+        backpack_label = format_string("Buy % Gold", {cost});
+        if gold < cost {
+            backpack_label = format_string("Need % Gold", {cost});
+            backpack_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+            backpack_bd.panel.width = UIK.pixels(289);
+            backpack_bd.panel.height = UIK.pixels(70);
+        }
+    }
+    backpack_handle = UIK.button("backpack_upgrade_buy", backpack_label, backpack_bd);
+    UIK.panel_end();
+    UIK.panel_end();
+
+    saw_row := UIK.panel_interior(.INSET);
+    saw_row.width = UIK.flex(1);
+    saw_row.height = UIK.pixels(104);
+    saw_row.padding = v4{10, 10, 10, 10};
+    saw_row.gap = 12;
+    UIK.panel_begin(saw_row);
+    saw_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(saw_layout);
+    saw_icon_box := UIK.layout_centered(UIK.pixels(70), UIK.pixels(70));
+    UIK.panel_begin(saw_icon_box);
+    UIK.image_fitted(saw_icon, UIK.image_desc(.CONTAIN), {1, 1, 1, 1});
+    UIK.panel_end();
+    saw_col := UIK.layout_column();
+    saw_col.width = UIK.flex(1);
+    saw_col.height = UIK.flex(1);
+    saw_col.gap = 2;
+    UIK.panel_begin(saw_col);
+    UIK.text(format_string("Sawmill Tier %", {player.sawmill_tier}), UIK.text_title());
+    if player.sawmill_tier < MAX_SAWMILL_TIER {
+        UIK.text(format_string("Processing time % seconds -> % seconds", {format_float(sawmill_process_time(player.sawmill_tier), decimals=2), format_float(sawmill_process_time(player.sawmill_tier + 1), decimals=2)}), UIK.text_body());
+    } else {
+        UIK.text(format_string("Processing time % seconds", {format_float(sawmill_process_time(player.sawmill_tier), decimals=2)}), UIK.text_body());
+        UIK.text("Maximum tier reached", UIK.text_body());
+    }
+    UIK.panel_end();
+    saw_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    saw_bd.panel.width = UIK.pixels(289);
+    saw_bd.panel.height = UIK.pixels(70);
+    saw_label := "Maximum";
+    if player.sawmill_tier >= MAX_SAWMILL_TIER {
+        saw_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        saw_bd.panel.width = UIK.pixels(289);
+        saw_bd.panel.height = UIK.pixels(70);
+    }
+    if player.sawmill_tier < MAX_SAWMILL_TIER {
+        cost := sawmill_upgrade_cost(player.sawmill_tier);
+        saw_label = format_string("Buy % Gold", {cost});
+        if gold < cost {
+            saw_label = format_string("Need % Gold", {cost});
+            saw_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+            saw_bd.panel.width = UIK.pixels(289);
+            saw_bd.panel.height = UIK.pixels(70);
+        }
+    }
+    sawmill_handle = UIK.button("sawmill_upgrade_buy", saw_label, saw_bd);
+    UIK.panel_end();
+    UIK.panel_end();
+
+    UIK.divider(2.0, {1, 1, 1, 0.28});
+
+    auto_row := UIK.panel_interior(.INSET);
+    auto_row.width = UIK.flex(1);
+    auto_row.height = UIK.pixels(104);
+    auto_row.padding = v4{10, 10, 10, 10};
+    UIK.panel_begin(auto_row);
+    auto_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(auto_layout);
+    auto_icon_box := UIK.layout_centered(UIK.pixels(66), UIK.pixels(66));
+    UIK.panel_begin(auto_icon_box);
+    UIK.image_fitted(saw_icon, UIK.image_desc(.CONTAIN), {0.75, 1.0, 0.72, 1});
+    UIK.panel_end();
+    auto_col := UIK.layout_column();
+    auto_col.width = UIK.flex(1);
+    auto_col.height = UIK.flex(1);
+    auto_col.gap = 2;
+    UIK.panel_begin(auto_col);
+    UIK.text("Automatic Sawmill", UIK.text_title());
+    UIK.panel_end();
+    auto_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    auto_bd.panel.width = UIK.pixels(289);
+    auto_bd.panel.height = UIK.pixels(70);
+    auto_label := "Buy";
+    if player_has_auto_sawmill(player) {
+        auto_label = "Owned";
+        auto_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        auto_bd.panel.width = UIK.pixels(289);
+        auto_bd.panel.height = UIK.pixels(70);
+    }
+    auto_handle = UIK.button("auto_sawmill_buy", auto_label, auto_bd);
+    UIK.panel_end();
+    UIK.panel_end();
+
+    bag_row := UIK.panel_interior(.INSET);
+    bag_row.width = UIK.flex(1);
+    bag_row.height = UIK.pixels(104);
+    bag_row.padding = v4{10, 10, 10, 10};
+    UIK.panel_begin(bag_row);
+    bag_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(bag_layout);
+    bag_icon_box := UIK.layout_centered(UIK.pixels(66), UIK.pixels(66));
+    UIK.panel_begin(bag_icon_box);
+    UIK.image_fitted(backpack_icon, UIK.image_desc(.CONTAIN), {1.0, 0.88, 0.35, 1});
+    UIK.panel_end();
+    bag_col := UIK.layout_column();
+    bag_col.width = UIK.flex(1);
+    bag_col.height = UIK.flex(1);
+    bag_col.gap = 2;
+    UIK.panel_begin(bag_col);
+    UIK.text("Unlimited Backpack", UIK.text_title());
+    UIK.panel_end();
+    bag_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    bag_bd.panel.width = UIK.pixels(289);
+    bag_bd.panel.height = UIK.pixels(70);
+    bag_label := "Buy";
+    if player_has_unlimited_backpack(player) {
+        bag_label = "Owned";
+        bag_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        bag_bd.panel.width = UIK.pixels(289);
+        bag_bd.panel.height = UIK.pixels(70);
+    }
+    unlimited_backpack_handle = UIK.button("unlimited_backpack_buy", bag_label, bag_bd);
+    UIK.panel_end();
+    UIK.panel_end();
+
+    speed_row := UIK.panel_interior(.INSET);
+    speed_row.width = UIK.flex(1);
+    speed_row.height = UIK.pixels(104);
+    speed_row.padding = v4{10, 10, 10, 10};
+    UIK.panel_begin(speed_row);
+    speed_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
+    UIK.panel_begin(speed_layout);
+    speed_icon_box := UIK.layout_centered(UIK.pixels(66), UIK.pixels(66));
+    UIK.panel_begin(speed_icon_box);
+    UIK.image_fitted(axe_icon, UIK.image_desc(.CONTAIN), {0.58, 0.92, 1.0, 1});
+    UIK.panel_end();
+    speed_col := UIK.layout_column();
+    speed_col.width = UIK.flex(1);
+    speed_col.height = UIK.flex(1);
+    speed_col.gap = 2;
+    UIK.panel_begin(speed_col);
+    UIK.text("Unlimited Move Speed", UIK.text_title());
+    UIK.panel_end();
+    speed_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    speed_bd.panel.width = UIK.pixels(289);
+    speed_bd.panel.height = UIK.pixels(70);
+    speed_label := "Buy";
+    if player_has_unlimited_move_speed(player) {
+        speed_label = "Owned";
+        speed_bd = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        speed_bd.panel.width = UIK.pixels(289);
+        speed_bd.panel.height = UIK.pixels(70);
+    }
+    unlimited_speed_handle = UIK.button("unlimited_speed_buy", speed_label, speed_bd);
+    UIK.panel_end();
+
+    UIK.panel_end();
+    UIK.panel_end();
+    UIK.end();
+
+    if UIK.clicked(exit_handle) {
+        player.show_upgrades_menu = false;
+    }
+    if axe_handle.generation > 0 && UIK.clicked(axe_handle) {
+        if player.axe_tier < MAX_AXE_TIER {
+            cost := axe_upgrade_cost(player.axe_tier);
+            if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
+                Economy.withdraw_currency(player, GOLD_CURRENCY, cost);
+                player.axe_tier += 1;
+                save_player_progress(player);
+                player.dialogue_text = "Axe upgraded.";
+                player.dialogue_timer = 1.5;
+                player.ui_pop_timer = 0.3;
+                spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("Axe: %", {player.axe_tier}), axe_tier_color(player.axe_tier), true);
+                spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, player.axe_tier, 18, axe_tier_color(player.axe_tier), true);
+                play_upgrade_sfx(player, AXE_UPGRADE_SFX);
+            } else {
+                player.dialogue_text = "Need more gold.";
+                player.dialogue_timer = 1.4;
+            }
+        }
+    }
+    if backpack_handle.generation > 0 && UIK.clicked(backpack_handle) {
+        if player.backpack_tier < MAX_BACKPACK_TIER {
+            cost := backpack_upgrade_cost(player.backpack_tier);
+            if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
+                Economy.withdraw_currency(player, GOLD_CURRENCY, cost);
+                player.backpack_tier += 1;
+                save_player_progress(player);
+                player.ui_pop_timer = 0.3;
+                player.dialogue_text = format_string("Backpack: % logs", {backpack_capacity(player.backpack_tier)});
+                player.dialogue_timer = 1.5;
+                spawn_float_text(player.entity.world_position + v2{0, 1.45}, format_string("Backpack: %", {effective_backpack_capacity(player)}), {0.62, 0.88, 1.0, 1}, true);
+                spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, player.backpack_tier, 14, {0.62, 0.88, 1.0, 0.75}, true);
+                play_upgrade_sfx(player, BACKPACK_UPGRADE_SFX);
+            } else {
+                player.dialogue_text = "Need more gold.";
+                player.dialogue_timer = 1.4;
+            }
+        }
+    }
+    if sawmill_handle.generation > 0 && UIK.clicked(sawmill_handle) {
+        if player.sawmill_tier < MAX_SAWMILL_TIER {
+            cost := sawmill_upgrade_cost(player.sawmill_tier);
+            if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
+                Economy.withdraw_currency(player, GOLD_CURRENCY, cost);
+                player.sawmill_tier += 1;
+                save_player_progress(player);
+                player.ui_pop_timer = 0.3;
+                player.dialogue_text = "Sawmill upgraded.";
+                player.dialogue_timer = 1.5;
+                spawn_float_text(player.entity.world_position + v2{0, 1.45}, format_string("Sawmill: %", {player.sawmill_tier}), {1.0, 0.78, 0.22, 1}, true);
+                spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, player.sawmill_tier, 16, {1.0, 0.78, 0.22, 0.75}, true);
+                play_purchase_item_sfx(player);
+            } else {
+                player.dialogue_text = "Need more gold.";
+                player.dialogue_timer = 1.4;
+            }
+        }
+    }
+    if !player_has_auto_sawmill(player) && auto_handle.generation > 0 && UIK.clicked(auto_handle) {
+        Purchasing.prompt_purchase(player, AUTO_SAWMILL_PRODUCT_ID);
+    }
+    if !player_has_unlimited_backpack(player) && unlimited_backpack_handle.generation > 0 && UIK.clicked(unlimited_backpack_handle) {
+        Purchasing.prompt_purchase(player, UNLIMITED_BACKPACK_PRODUCT_ID);
+    }
+    if !player_has_unlimited_move_speed(player) && unlimited_speed_handle.generation > 0 && UIK.clicked(unlimited_speed_handle) {
+        Purchasing.prompt_purchase(player, UNLIMITED_MOVE_SPEED_PRODUCT_ID);
+    }
+}
+

@@ -1,0 +1,326 @@
+log_debug   :: proc(fmt: string, args: [^]any = {}) #foreign;
+log_info    :: proc(fmt: string, args: [^]any = {}) #foreign;
+log_warning :: proc(fmt: string, args: [^]any = {}) #foreign;
+log_error   :: proc(fmt: string, args: [^]any = {}) #foreign;
+print :: log_info;
+log :: log_info;
+
+format_string :: proc(fmt: string, args: [^]any = {}) -> string #foreign;
+
+string_trim :: proc(str: string) -> string #foreign;
+string_substring :: proc(str: string, start: int, length: int) -> string #foreign;
+string_split :: proc(str: string, delimiter: string) -> []string #foreign;
+
+Format_Int :: struct {
+    // :CSLFormatInt
+    v: s64;
+    leading_zeroes: s64;
+}
+
+format_int :: proc(v: int, leading_zeroes: int = 0) -> Format_Int {
+    result: Format_Int;
+    result.v              = v;
+    result.leading_zeroes = leading_zeroes;
+    return result;
+}
+
+Format_Float :: struct {
+    // :CSLFormatFloat
+    v: f32;
+    leading_zeroes: s64;
+    decimals: s64;
+}
+
+format_float :: proc(v: f32, decimals: int = 6, leading_zeroes: int = 0) -> Format_Float {
+    result: Format_Float;
+    result.v              = v;
+    result.leading_zeroes = leading_zeroes;
+    result.decimals       = decimals;
+    return result;
+}
+
+assert :: proc(condition: bool, fmt: string, args: [^]any = {}) #foreign "csl_assert";
+
+memcpy :: proc(dst: *u8, src: *u8, count: int) #foreign "csl_memcpy";
+
+
+
+sin   :: proc(v: float) -> float #intrinsic "sin_f32";
+sin   :: proc(v: f64) -> f64 #intrinsic "sin_f64";
+cos   :: proc(v: float) -> float #intrinsic "cos_f32";
+cos   :: proc(v: f64) -> f64 #intrinsic "cos_f64";
+atan2 :: proc(y: float, x: float) -> float #intrinsic "atan2_f32";
+atan2 :: proc(y: f64, x: f64) -> f64 #intrinsic "atan2_f64";
+
+to_degrees :: proc(radians: float) -> float {
+    return radians * 180.0 / PI;
+}
+
+to_radians :: proc(degrees: float) -> float {
+    return degrees * PI / 180.0;
+}
+
+Matrix4 :: struct {
+    elements: [4][4]float;
+
+    translate :: proc(translation: v2) -> Matrix4 #foreign "matrix4_translate_2d";
+    rotate    :: proc(degrees: float) -> Matrix4 #foreign "matrix4_rotate_2d";
+
+    translate :: proc(translation: v3) -> Matrix4 #foreign "matrix4_translate";
+    rotate    :: proc(degrees: float, axis: v3) -> Matrix4 #foreign "matrix4_rotate";
+
+    multiply :: proc(a: Matrix4, b: Matrix4) -> Matrix4 #foreign "matrix4_multiply_matrix4";
+
+    rotate_about_point :: proc(point: v2, degrees: float) -> Matrix4 {
+        return Matrix4.translate(point).multiply(Matrix4.rotate(degrees, {0, 0, 1}).multiply(Matrix4.translate(-point)));
+    }
+}
+
+
+
+Time :: struct {
+    nanoseconds_since_epoch :: proc() -> u64 #foreign "time_nanoseconds_since_epoch";
+}
+
+
+
+hash_murmur32 :: proc(data: *u8, count: s64, seed: u64 = 0) -> u64 #foreign "csl_hash_bytes";
+
+new_string  :: proc(count: int)  -> string #foreign;
+copy_string :: proc(str: string) -> string #foreign;
+to_lower    :: proc(str: string) -> string #foreign;
+to_upper    :: proc(str: string) -> string #foreign;
+
+rng_seed        :: proc(seed: u64)                          -> u64   #foreign;
+rng_range_float :: proc(rng: ref u64, lo: float, hi: float) -> float #foreign;
+rng_range_int   :: proc(rng: ref u64, lo: s64,   hi: s64)   -> s64   #foreign;
+
+rng_shuffle :: proc(rng: ref u64, array: []$T) {
+    for i: 0..array.count-1 {
+        j := rng_range_int(ref rng, 0, array.count-1);
+        temp := array[i];
+        array[i] = array[j];
+        array[j] = temp;
+    }
+}
+
+// Returns a uniformly distributed random point within a unit disc (length <= 1)
+rng_disk :: proc(rng: ref u64) -> v2 {
+    angle := rng_range_float(ref rng, 0, 2 * PI);
+    radius := sqrt(rng_range_float(ref rng, 0, 1)); // sqrt for uniform distribution
+    return v2{radius * cos(angle), radius * sin(angle)};
+}
+
+// Returns a uniformly distributed random point within an annulus (inner_radius <= length <= outer_radius)
+rng_disk :: proc(rng: ref u64, inner_radius: float, outer_radius: float) -> v2 {
+    angle := rng_range_float(ref rng, 0, 2 * PI);
+    // For uniform distribution in annulus, sample from [r_inner^2, r_outer^2] then sqrt
+    r_sq := rng_range_float(ref rng, inner_radius * inner_radius, outer_radius * outer_radius);
+    radius := sqrt(r_sq);
+    return v2{radius * cos(angle), radius * sin(angle)};
+}
+
+
+
+// [..]T
+
+append :: proc(list: ref [..]$T, element: T) {
+    if list.count >= list.capacity {
+        list.reserve(max(next_power_of_two(list.count+1), 8));
+    }
+    i := list.count;
+    #unsafe list.count += 1;
+    list[i] = element;
+}
+
+reserve :: proc(list: ref [..]$T, new_capacity: int) {
+    if new_capacity > list.capacity {
+        new_elements := new(T, new_capacity);
+        if list.data != null {
+            memcpy((&new_elements.data.*).(*u8), (&list.data.*).(*u8), list.count * #size_of(T));
+        }
+        #unsafe list.data = new_elements.data;
+        #unsafe list.capacity = new_capacity;
+    }
+}
+
+pop :: proc(using this: ref [..]$T) -> T {
+    assert(count > 0, "list was empty");
+    result := this[count-1];
+    #unsafe count -= 1;
+    return result;
+}
+
+clear :: proc(using this: ref [..]$T) {
+    #unsafe count = 0;
+}
+
+contains :: proc(array: []$T, value: T) -> bool {
+    for elem: array {
+        if elem == value return true;
+    }
+    return false;
+}
+
+Dynamic_Array_Removal_Mode :: enum {
+    ONE;
+    ALL;
+}
+
+unordered_remove_by_value :: proc(using this: ref [..]$T, value: T, $mode: Dynamic_Array_Removal_Mode = .ONE) {
+    i := 0;
+    while i < count {
+        if this[i] == value {
+            this[i] = this[count-1];
+            #unsafe count -= 1;
+            #if mode == .ONE {
+                break;
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
+ordered_remove_by_value :: proc(using this: ref [..]$T, value: T, $mode: Dynamic_Array_Removal_Mode = .ONE) {
+    i := 0;
+    while i < count {
+        if this[i] == value {
+            for j: i..count-2 {
+                this[j] = this[j+1];
+            }
+            #unsafe count -= 1;
+            #if mode == .ONE {
+                break;
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
+unordered_remove_by_index :: proc(using this: ref [..]$T, index: int) {
+    this[index] = this[count-1];
+    #unsafe count -= 1;
+}
+
+ordered_remove_by_index :: proc(using this: ref [..]$T, index: int) {
+    for i: index..count-2 {
+        this[i] = this[i+1];
+    }
+    #unsafe count -= 1;
+}
+
+
+
+pow :: proc(b: float, e: float) -> float #intrinsic "pow_f32";
+pow :: proc(b: f64, e: f64) -> f64 #intrinsic "pow_f64";
+sqrt :: proc(x: float) -> float #intrinsic "sqrt_f32";
+sqrt :: proc(x: f64) -> f64 #intrinsic "sqrt_f64";
+next_power_of_two :: proc(n: s64) -> s64 {
+    if n <= 0 {
+        return 0;
+    }
+    n -= 1;
+    n |= n >> 1;
+    n |= n >> 2;
+    n |= n >> 4;
+    n |= n >> 8;
+    n |= n >> 16;
+    n |= n >> 32;
+    n += 1;
+    return n;
+}
+
+sign :: proc(v: $T) -> T {
+    if v < 0 {
+        return -1;
+    }
+    return 1;
+}
+
+length :: proc(v: v2) -> float #intrinsic "length_v2";
+length :: proc(v: v3) -> float #intrinsic "length_v3";
+length :: proc(v: v4) -> float #intrinsic "length_v4";
+
+length_squared :: proc(v: v2) -> float #intrinsic "length_squared_v2";
+length_squared :: proc(v: v3) -> float #intrinsic "length_squared_v3";
+length_squared :: proc(v: v4) -> float #intrinsic "length_squared_v4";
+
+normalize :: proc(v: v2) -> v2 #intrinsic "normalize_v2";
+normalize :: proc(v: v3) -> v3 #intrinsic "normalize_v3";
+normalize :: proc(v: v4) -> v4 #intrinsic "normalize_v4";
+
+in_range :: proc(v: $T, distance: float) -> bool {
+    return length_squared(v) <= (distance*distance);
+}
+
+in_range :: proc(a: $T, b: T, distance: float) -> bool {
+    return length_squared(a, b) <= (distance*distance);
+}
+
+normalize_vector_to_radius :: proc(v: $T, max_length: float) -> T {
+    l := length(v);
+    if l > max_length {
+        v = v / l * max_length;
+    }
+    return v / max_length;
+}
+
+dot :: proc(a: v2, b: v2) -> float {
+    return a.x*b.x + a.y*b.y;
+}
+
+dot :: proc(a: v3, b: v3) -> float {
+    return a.x*b.x + a.y*b.y + a.z*b.z;
+}
+
+dot :: proc(a: v4, b: v4) -> float {
+    return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w;
+}
+
+PI :: 3.14159265359;
+
+lerp :: proc(a: $T, b: T, t: float) -> T {
+    return a + (b - a) * t;
+}
+
+clamp :: proc(a: $T, min: T, max: T) -> T {
+    if a < min {
+        return min;
+    }
+    if a > max {
+        return max;
+    }
+    return a;
+}
+
+max :: proc(a: $T, b: T) -> T {
+    if a > b {
+        return a;
+    }
+    return b;
+}
+
+min :: proc(a: $T, b: T) -> T {
+    if a < b {
+        return a;
+    }
+    return b;
+}
+
+abs :: proc(a: $T) -> T {
+    if a < 0 {
+        return -a;
+    }
+    return a;
+}
+
+linear_step :: proc(start: float, end: float, time: float) -> float {
+    denom := end-start;
+    if denom == 0 {
+        return 1;
+    }
+    t := (time-start) / (end-start);
+    return clamp(t, 0, 1);
+}

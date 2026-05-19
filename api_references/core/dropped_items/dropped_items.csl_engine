@@ -1,0 +1,249 @@
+import "core:ao"
+
+Dropped_Item :: class : Component {
+    item: Item_Instance;
+    sprite: Sprite_Renderer;
+    starburst: Sprite_Renderer;
+    shadow: Sprite_Renderer;
+    interactable: Interactable;
+
+    visual_root: Entity;
+
+    spawn_time: float;
+    despawn_time_start: float;
+    start_position: v2;
+    target_position: v2;
+
+    is_animating: bool;
+    claimed: bool;
+    time_claimed: float;
+
+    exclusive_to_player: string; // note(josh): player ID, in case they disconnect and reconnect
+
+    DESPAWN_WARNING_TIME :: 30.0; // Show bar after this many seconds
+    DESPAWN_DURATION :: 10.0;      // Bar ticks down over this many seconds
+
+    can_use :: method(player: Player) -> bool {
+        if claimed return false;
+        if is_animating return false;
+        if exclusive_to_player.count > 0 {
+            if player.get_user_id() != exclusive_to_player {
+                return false;
+            }
+        }
+        will_destroy: bool;
+        return Items.can_move_item_to_inventory(item, player.default_inventory, ref will_destroy);
+    }
+
+    on_interact :: method(player: Player) {
+        will_destroy: bool;
+        if Items.can_move_item_to_inventory(item, player.default_inventory, ref will_destroy) {
+            Items.move_item_to_inventory(item, player.default_inventory);
+            claimed = true;
+            time_claimed = get_time();
+            entity.queue_for_destruction(1);
+        }
+    }
+
+    on_holding :: method(player: Player) {
+        // Reset despawn timer while player is interacting
+        despawn_time_start = get_time();
+    }
+
+    ao_start :: method() {
+        interactable = entity.get_component(Interactable);
+        interactable.set_listener(this);
+
+        spawn_time = get_time();
+        despawn_time_start = spawn_time;
+    }
+
+    ao_on_state_sync :: method() {
+        update_visibility();
+    }
+
+    update_visibility :: method() {
+        if Game.is_server() return;
+        visible := true;
+        if exclusive_to_player.count > 0 {
+            if local_player, ok := Game.get_local_player(); ok {
+                if exclusive_to_player != local_player.get_user_id() {
+                    visible = false;
+                }
+            }
+        }
+        entity.set_local_enabled(visible);
+    }
+
+    ao_update :: method(dt: float) {
+        if claimed {
+            t := Ease.out_quart(Ease.T(get_time() - time_claimed, 1));
+            visual_root.set_local_scale({lerp(1.0, 0.5, t), lerp(1.0, 1.5, t)});
+            sprite.color.w = lerp(sprite.color.w, 0, t);
+            starburst.color.w = lerp(starburst.color.w, 0, t);
+            shadow.color.w = lerp(shadow.color.w, 0, t);
+            visual_root.set_local_position(lerp(v2{}, v2{0, 2}, t));
+        }
+        else {
+            if is_animating {
+                t := Ease.T(get_time() - spawn_time, 0.5);
+                if t < 1 {
+                    // do an arc for y
+                    y := sin(t * PI);
+                    visual_root.set_local_position({0, y});
+                    current_position := lerp(start_position, target_position, t);
+                    entity.set_local_position(current_position);
+                }
+                else {
+                    is_animating = false;
+                }
+            }
+
+            // Despawn logic
+            time_alive := get_time() - despawn_time_start;
+            if time_alive >= DESPAWN_WARNING_TIME + DESPAWN_DURATION {
+                Items.destroy_item_instance(item);
+                entity.destroy();
+                return;
+            }
+            else if time_alive >= DESPAWN_WARNING_TIME {
+                UI.push_world_draw_context();
+                defer UI.pop_draw_context();
+
+                pos := entity.world_position;
+                UI.push_z(pos.y);
+                defer UI.pop_z();
+
+                // Calculate remaining time as 0-1 (1 = full, 0 = empty)
+                time_alive := get_time() - despawn_time_start;
+                time_in_warning := time_alive - DESPAWN_WARNING_TIME;
+                fill_pct := 1.0 - (time_in_warning / DESPAWN_DURATION);
+
+                // Bar position above the item
+                bar_pos := pos + v2{0, 0.7};
+                bar_rect := Rect{bar_pos, bar_pos}.grow(0.04, 0.3, 0.04, 0.3);
+
+                // Background
+                UI.quad(bar_rect, core_globals.white_sprite, {0, 0, 0, 0.6});
+
+                // Fill (red to show urgency)
+                if fill_pct > 0 {
+                    fill_rect := bar_rect.inset_unscaled(0.02).subrect(0, 0, fill_pct, 1);
+                    UI.quad(fill_rect, core_globals.white_sprite, {0.8, 0.2, 0.2, 0.9});
+                }
+            }
+        }
+
+        // Spin the starburst
+        rotation := (get_time() - spawn_time) * 30;
+        starburst.entity.set_local_rotation(rotation);
+    }
+
+    spawn :: proc(position: v2, item: Item_Instance) -> Dropped_Item {
+        defn := item.get_definition();
+
+        // Create the entity at the start position (will animate to target)
+        dropped_entity := Scene.create_entity();
+        dropped_entity.set_local_position(position);
+
+        VISUAL_SCALE :: 0.5;
+
+        visual_root := Scene.create_entity();
+        visual_root.set_parent(dropped_entity, false);
+        visual_root.set_local_scale({0.5, 0.5});
+
+        DEPTH_OFFSET :: VISUAL_SCALE * 0.7;
+
+        // Create child entity for the item icon sprite (scaled to ~1 world unit)
+        icon_entity := Scene.create_entity();
+        icon_entity.set_parent(visual_root, false);
+        sprite := icon_entity.add_component(Sprite_Renderer);
+        icon := defn.get_icon();
+        if icon != null {
+            sprite.set_texture(icon);
+            // Scale so the icon is about 1 world unit (240 pixels = 1 unit)
+            PIXELS_PER_UNIT :: 240.0;
+            icon_scale := PIXELS_PER_UNIT / max(icon.get_width(), icon.get_height()).(float);
+            icon_entity.set_local_scale({icon_scale, icon_scale});
+            sprite.depth_offset = -DEPTH_OFFSET / icon_entity.local_scale.y;
+        }
+
+        // Create starburst child entity (renders behind the item)
+        // Sized by rarity (0.5 to 1.0 world units)
+        starburst_entity := Scene.create_entity();
+        starburst_entity.set_parent(visual_root, false);
+        starburst_sprite := starburst_entity.add_component(Sprite_Renderer);
+        #static starburst_texture := get_asset(Texture_Asset, "$AO/ui/starburst.png");
+        starburst_sprite.set_texture(starburst_texture);
+        starburst_sprite.color = get_tier_color(defn.tier);
+
+        // Size and color starburst based on item tier
+        rarity_scale := 0.75 + defn.tier.(float) * 0.125;
+        starburst_entity.set_local_scale({rarity_scale, rarity_scale});
+        starburst_sprite.depth_offset = (-DEPTH_OFFSET+0.002) / starburst_entity.local_scale.y; // Behind the item
+
+        // Add sprite renderer for a shadow
+        shadow_entity := Scene.create_entity();
+        shadow_entity.set_parent(visual_root, false);
+        shadow_entity.set_local_position({0, -0.5});
+        shadow_entity.set_local_scale({0.2, 0.05});
+        shadow_sprite := shadow_entity.add_component(Sprite_Renderer);
+        #static circle_sprite := get_asset(Texture_Asset, "$AO/circle.png");
+        shadow_sprite.set_texture(circle_sprite);
+        shadow_sprite.depth_offset = (-DEPTH_OFFSET+0.001) / shadow_entity.local_scale.y; // Behind the item, in front of the starburst
+        shadow_sprite.color = {0, 0, 0, 0.5};
+
+        // Add interactable
+        interactable := dropped_entity.add_component(Interactable);
+        interactable.set_text(format_string("Pick up %", {defn.get_name()}));
+        interactable.radius = 1;
+        interactable.required_hold_time = 0.2;
+
+        // Add the dropped item component
+        dropped_item := dropped_entity.add_component(Dropped_Item);
+        dropped_item.item = item;
+        dropped_item.visual_root = visual_root;
+        dropped_item.sprite = sprite;
+        dropped_item.starburst = starburst_sprite;
+        dropped_item.shadow = shadow_sprite;
+        dropped_item.start_position = position;
+        dropped_item.target_position = position;
+
+        return dropped_item;
+    }
+
+    handle_dropped_item :: proc(hotbar_result: Draw_Hotbar_Result, position: v2, out_item: ref Dropped_Item) -> bool {
+        if hotbar_result.dropped_item != null {
+            Items.remove_item_from_inventory(hotbar_result.dropped_item, hotbar_result.dropped_item.inventory);
+            out_item = Dropped_Item.spawn(position, hotbar_result.dropped_item);
+            return true;
+        }
+        return false;
+    }
+
+    do_spawn_animation :: method(rng: ref u64, snap_to_navmesh: Navmesh = null) {
+        // Get a random target position within 1 unit radius
+        offset := rng_disk(ref rng, 1, 2);
+        new_target_position := start_position + offset;
+
+        // Snap to navmesh if available and close enough
+        if snap_to_navmesh != null {
+            navmesh_point: v2;
+            triangle_hint: s64;
+            if snap_to_navmesh.try_find_closest_point_on_navmesh(new_target_position, ref navmesh_point, ref triangle_hint) {
+                new_target_position = navmesh_point;
+            }
+        }
+
+        target_position = new_target_position;
+        is_animating = true;
+    }
+
+    set_exclusive :: method(player: Player) {
+        exclusive_to_player = {};
+        if player != null {
+            exclusive_to_player = player.get_user_id();
+        }
+        update_visibility();
+    }
+}

@@ -1,0 +1,231 @@
+HLSL:
+Vertex Shader:
+cbuffer user_input: register(b1) {
+float3 paletteShadow;
+float _ao_pad0;
+float3 paletteMid;
+float _ao_pad1;
+float3 paletteHi;
+float paletteBlackPoint;
+float paletteWhitePoint;
+float paletteGamma;
+float tintStrength;
+float shadowBoost;
+float outlineLow;
+float outlineHigh;
+float outlineDarken;
+float outlineLumaMin;
+float outlineLumaMax;
+};
+
+#define MATRIX_TEXTURE_PROVIDED
+
+struct vs_in {
+    float2 pos: POS;
+    float2 uv: UV;
+    float2 uv2: UV1;
+    float4 color: COLOR;
+    int matrix_index: MATRIX_INDEX;
+};
+
+
+cbuffer params: register(b0) {
+    float4x4 mvp;
+    float4 resolution_time;
+    int matrix_image_size;
+};
+#define FLIP_IF_GL(y) do { } while (0);
+
+Texture2D<float4> matrices: register(t0);
+sampler matrices_smp: register(s0);
+
+#ifdef MATRIX_TEXTURE_PROVIDED
+int3 create_pixel_coord(int index) {
+    int x = index % matrix_image_size;
+    int y = index / matrix_image_size;
+    return int3(x, y, 0);
+}
+float4x4 final_mvp(vs_in inp) {
+    float4 _0 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 0));
+    float4 _1 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 1));
+    float4 _2 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 2));
+    float4 _3 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 3));
+    float4x4 model_matrix = float4x4(_0, _1, _2, _3);
+    return mul(mvp, model_matrix);
+}
+#endif
+
+float4 bc7_correct_alpha(float4 color) {
+    // map 254 to 255. this is because bc7 is lossy in the alpha channel and an opaque pixel often outputs as 254 alpha.
+    if (color.a > 0.995f && color.a <= 1.0f) color.a = 1.0f;
+    return color;
+}
+
+struct vs_out {
+	float4 color: COLOR0;
+	float2 uv: UV;
+	float2 shadow_uv: TEXCOORD0;
+	float4 pos: SV_Position;
+};
+vs_out vs_main(vs_in inp) {
+	vs_out outp;
+	outp.pos = mul(mvp, float4(inp.pos.xy, 0, 1.0f));
+	outp.uv = inp.uv;
+	outp.color = inp.color;
+	outp.shadow_uv = (outp.pos.xy + float2(1,1)) / 2;
+	return outp;
+}
+
+
+
+Fragment Shader:
+cbuffer user_input: register(b1) {
+float3 paletteShadow;
+float _ao_pad0;
+float3 paletteMid;
+float _ao_pad1;
+float3 paletteHi;
+float paletteBlackPoint;
+float paletteWhitePoint;
+float paletteGamma;
+float tintStrength;
+float shadowBoost;
+float outlineLow;
+float outlineHigh;
+float outlineDarken;
+float outlineLumaMin;
+float outlineLumaMax;
+};
+
+Texture2D<float4> albedo: register(t0);
+sampler albedo_smp: register(s0);
+Texture2D<float4> noise_texture: register(t1);
+sampler noise_texture_smp: register(s1);
+
+#define MATRIX_TEXTURE_PROVIDED
+
+struct vs_in {
+    float2 pos: POS;
+    float2 uv: UV;
+    float2 uv2: UV1;
+    float4 color: COLOR;
+    int matrix_index: MATRIX_INDEX;
+};
+
+
+cbuffer params: register(b0) {
+    float4x4 mvp;
+    float4 resolution_time;
+    int matrix_image_size;
+};
+#define FLIP_IF_GL(y) do { } while (0);
+
+Texture2D<float4> matrices: register(t0);
+sampler matrices_smp: register(s0);
+
+#ifdef MATRIX_TEXTURE_PROVIDED
+int3 create_pixel_coord(int index) {
+    int x = index % matrix_image_size;
+    int y = index / matrix_image_size;
+    return int3(x, y, 0);
+}
+float4x4 final_mvp(vs_in inp) {
+    float4 _0 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 0));
+    float4 _1 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 1));
+    float4 _2 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 2));
+    float4 _3 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 3));
+    float4x4 model_matrix = float4x4(_0, _1, _2, _3);
+    return mul(mvp, model_matrix);
+}
+#endif
+
+float4 bc7_correct_alpha(float4 color) {
+    // map 254 to 255. this is because bc7 is lossy in the alpha channel and an opaque pixel often outputs as 254 alpha.
+    if (color.a > 0.995f && color.a <= 1.0f) color.a = 1.0f;
+    return color;
+}
+
+float noise(float2 p)
+{
+	float s = noise_texture.Sample(noise_texture_smp, float2(1.0f, 2.0f - 2.0f*cos(resolution_time.z))*resolution_time.z*20.0f + p*1.0f).x;
+	s *= s;
+	return s;
+}
+
+float ramp(float y, float start, float end)
+{
+	float inside = step(start,y) - step(end,y);
+	float fact = (y-start)/(end-start)*inside;
+	return (1.-fact) * inside;
+}
+
+float4 ps_main(float4 vtxColor: COLOR0, float2 uv: UV, float2 shadow_uv: TEXCOORD0): SV_Target0 {
+	float4 base = vtxColor * albedo.Sample(albedo_smp, uv);
+
+	// Detect near-black outlines (keep as-is), tint everything else to gold
+	float luma = dot(base.rgb, float3(0.299f, 0.587f, 0.114f));
+	float maxRGB = max(base.r, max(base.g, base.b));
+	float nonOutline = smoothstep(outlineLow, outlineHigh, maxRGB); // 0 near black, 1 otherwise
+
+	// Normalize base luminance so dark/light source art maps consistently into the palette
+	float denom = max(0.001f, paletteWhitePoint - paletteBlackPoint);
+	float lNorm = saturate((luma - paletteBlackPoint) / denom);
+	// shade: gamma-adjusted luminance used to drive palette interpolation
+	float shade = pow(lNorm, max(0.01f, paletteGamma));
+	float3 toneA = lerp(paletteShadow, paletteMid, smoothstep(0.00f, 0.60f, shade));
+	float3 goldTone = lerp(toneA, paletteHi,  smoothstep(0.65f, 1.00f, shade));
+
+	// Darker bases get stronger tint using shadowBoost
+	float boost = lerp(1.0f, 1.0f + shadowBoost, 1.0f - shade);
+	float tintW = saturate(tintStrength * nonOutline * boost);
+	float3 rgb = lerp(base.rgb, goldTone, tintW);
+
+	// Strengthen and shape outlines: remap outline region to grayscale from black → dark gray
+	float outlineMask = 1.0f - nonOutline;
+	float edge = 1.0f - outlineMask; // 0 at pure black, 1 at outline boundary
+	float targetLuma = lerp(outlineLumaMin, outlineLumaMax, edge);
+	float3 outlineGray = float3(targetLuma, targetLuma, targetLuma);
+	rgb = lerp(rgb, outlineGray, outlineMask * saturate(outlineDarken));
+
+	// Vibrance: boost saturation of non-outline mid/high tones
+	float3 gray = float3(luma, luma, luma);
+	float vibrance = 0.38f;
+	float vibMask = nonOutline * smoothstep(0.12f, 0.95f, shade);
+	rgb = saturate(gray + (rgb - gray) * (1.0f + vibrance * vibMask));
+
+	// Shimmer: animated noise + diagonal wave + sweeping band (no aura/specular)
+	float t = resolution_time.z;
+	float n1 = noise(uv*3.0f + float2(0.00f, 0.00f));
+	float n2 = noise(uv*6.0f + float2(5.20f, 1.30f));
+	float diagonal = sin((uv.x + uv.y)*24.0f + t*7.5f)*0.5f + 0.5f;
+	float diagonal2 = sin((uv.x*1.3f - uv.y*1.1f)*34.0f + t*5.5f)*0.5f + 0.5f;
+	float sweepCoord = fmod(uv.x*0.9f + uv.y*0.7f + t*0.85f, 1.0f);
+	float sweep = ramp(sweepCoord, 0.35f, 0.65f);
+	float baseNoise = (n1*0.6f + n2*0.4f);
+	baseNoise = smoothstep(0.30f, 0.95f, baseNoise);
+	float shimmer = baseNoise*0.95f + (diagonal*0.22f + diagonal2*0.18f) + sweep*1.25f;
+	shimmer *= nonOutline * smoothstep(0.06f, 1.00f, luma);
+	shimmer = saturate(shimmer);
+	float hot = smoothstep(0.78f, 1.0f, shimmer) * 0.85f;
+	float3 shimmerColor = float3(1.00f, 0.98f, 0.96f); // near-white
+	float whiten = saturate(shimmer*0.35f + hot*0.85f);
+	rgb = lerp(rgb, float3(1.0f, 1.0f, 1.0f), whiten);
+	rgb += shimmer * shimmerColor * 0.12f; // subtle additive to keep sparkle energy
+
+	// Keep only sparkles (no aura/specular/sweep)
+	float spA = noise(uv*45.0f + float2(7.3f, 3.1f));
+	float spB = noise(uv*85.0f + float2(1.1f, 9.7f));
+	float twinkle = sin(t*12.0f + spA*9.0f)*0.5f + 0.5f;
+	float sparkleMask = spA*0.7f + spB*0.3f + (twinkle-0.5f)*0.20f;
+	float sparkle = step(0.965f, sparkleMask) * nonOutline * smoothstep(0.15f, 1.00f, luma);
+	float3 sparkleColor = float3(1.00f, 0.95f, 0.55f);
+	rgb += sparkle * sparkleColor * 1.35f;
+
+	// Premultiply and output
+	rgb = saturate(rgb);
+	rgb *= base.a;
+	return float4(rgb, base.a);
+}
+
+
+

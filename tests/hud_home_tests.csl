@@ -1,0 +1,7 @@
+test_home_button_teleports_to_base :: proc() {
+    Test.teleport({40, 10});
+    Test.wait_seconds(0.5);
+    Test.click_button("go_home");
+    Test.wait_seconds(0.75);
+    Test.assert_player_near("home button returns to base", {0, 0}, 1.5);
+}

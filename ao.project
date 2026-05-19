@@ -1,0 +1,10 @@
+{
+    csl: true
+    projects:
+    [
+        {
+            name: "Lumber Tycoon Adventure"
+            id: "6a08058bcfd19f858ee49095"
+        }
+    ]
+}

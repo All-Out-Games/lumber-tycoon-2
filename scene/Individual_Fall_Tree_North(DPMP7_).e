@@ -1,0 +1,46 @@
+14
+554050781186
+3476094718
+{
+  "name": "Individual_Fall_Tree_North",
+  "local_enabled": true,
+  "local_position": {
+    "X": 10.6826362609863281,
+    "Y": 15.7109050750732422
+  },
+  "local_rotation": 0,
+  "local_scale": {
+    "X": 2.9745063781738281,
+    "Y": 2.7037034034729004
+  },
+  "previous_sibling": 3474622335,
+  "next_sibling": 3485881073
+},
+{
+  "cid": 2,
+  "aoid": 3483782746,
+  "component_type": "Internal_Component",
+  "internal_component_type": "Lumber_Tree",
+  "data": {
+
+  }
+},
+{
+  "cid": 97,
+  "aoid": 2176988255,
+  "component_type": "Internal_Component",
+  "internal_component_type": "Sprite_Renderer",
+  "data": {
+    "texture": "$AO/ui/kit/Game UI/Item Backs/inventory_squares_3/inv_square_missing_white.png",
+    "tint": {
+      "X": 0.2000000029802322,
+      "Z": 0.2000000029802322,
+      "W": 0.7200000286102295
+    },
+    "layer": 12,
+    "scale": {
+      "X": 1.3500000238418579,
+      "Y": 1.3500000238418579
+    }
+  }
+}
