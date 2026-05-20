@@ -67,11 +67,11 @@ POLISHING_MACHINE_AUTO_ZONE_RADIUS :: 2.75;
 SELL_AUTO_ZONE_RADIUS :: 2.65;
 AUTO_ZONE_CHECK_SECONDS :: 0.25;
 ALIEN_REFINER_UNLOCK_COST :: 6000;
-TREE_REGROW_LOW_TIER_MIN_SECONDS :: 240.0;
-TREE_REGROW_LOW_TIER_MAX_SECONDS :: 300.0;
-TREE_REGROW_HIGH_TIER_MIN_SECONDS :: 20.0;
-TREE_REGROW_HIGH_TIER_MAX_SECONDS :: 45.0;
-BASE_TIER_TREE_MIN_ALIVE :: 50;
+TREE_REGROW_LOW_TIER_MIN_SECONDS :: 120.0;
+TREE_REGROW_LOW_TIER_MAX_SECONDS :: 150.0;
+TREE_REGROW_HIGH_TIER_MIN_SECONDS :: 10.0;
+TREE_REGROW_HIGH_TIER_MAX_SECONDS :: 22.5;
+BASE_TIER_TREE_MIN_ALIVE :: 250;
 BASE_TIER_TREE_SUPPLY_CHECK_SECONDS :: 2.0;
 TREE_HEALTH :: 6;
 MAX_TREE_LEVEL :: 5;
@@ -83,14 +83,14 @@ AUTO_SAWMILL_PRODUCT_ID :: "6a08faac014578603d2d145f";
 UNLIMITED_BACKPACK_PRODUCT_ID :: "6a0b73af8063e5a9ee3400fa";
 UNLIMITED_MOVE_SPEED_PRODUCT_ID :: "6a0b73b08063e5a9ee3400fb";
 MAX_AXE_SCREEN_SHAKE :: 0.123333;
-FOREST_CANOPY_QUERY_RADIUS :: 2.55;
-FOREST_CANOPY_BASE_RADIUS :: 0.75;
-FOREST_CANOPY_SCALE_RADIUS :: 0.55;
-FOREST_CANOPY_EDGE_WEIGHT :: 0.18;
+FOREST_CANOPY_QUERY_RADIUS :: 2.85;
+FOREST_CANOPY_BASE_RADIUS :: 0.82;
+FOREST_CANOPY_SCALE_RADIUS :: 0.62;
+FOREST_CANOPY_EDGE_WEIGHT :: 0.10;
 FOREST_SURROUNDED_COVER_SCORE :: 1.6;
 FOREST_DENSE_COVER_SCORE :: 9.0;
-FOREST_DISTANCE_SLOW_START :: 5.0;
-FOREST_DISTANCE_SLOW_FULL :: 26.25;
+FOREST_DISTANCE_SLOW_START :: 14.0;
+FOREST_DISTANCE_SLOW_FULL :: 42.0;
 FOREST_NEAR_MAX_SLOW :: 0.35;
 FOREST_FAR_MAX_SLOW :: 0.78;
 FOREST_NEAR_COVER_SPEED_CAP :: 0.78;
@@ -269,6 +269,18 @@ tree_grid_clear :: proc() {
     }
 }
 
+tree_axe_collision_position :: proc(tree: Lumber_Tree) -> v2 {
+    if tree == null || !#alive(tree.entity) return v2{0, 0};
+
+    pos := tree.entity.world_position;
+    if tree.sprite != null && #alive(tree.sprite) && tree.sprite.get_enabled() {
+        // In sprite-renderer mode the entity is shifted up to align the baked
+        // image visually. Axe collision should stay near the trunk/base.
+        pos -= TREE_IDLE_SPRITE_POSITION_OFFSET;
+    }
+    return pos;
+}
+
 tree_grid_rebuild :: proc() {
     tree_grid_clear();
     found := false;
@@ -278,7 +290,7 @@ tree_grid_rebuild :: proc() {
     for tree: component_iterator(Lumber_Tree) {
         if tree == null continue;
         if !#alive(tree.entity) continue;
-        pos := tree.entity.world_position;
+        pos := tree_axe_collision_position(tree);
         if !found {
             min_pos = pos;
             max_pos = pos;
@@ -305,8 +317,9 @@ tree_grid_rebuild :: proc() {
     for tree: component_iterator(Lumber_Tree) {
         if tree == null continue;
         if !#alive(tree.entity) continue;
-        x := tree_grid_cell_x(tree.entity.world_position.x);
-        y := tree_grid_cell_y(tree.entity.world_position.y);
+        pos := tree_axe_collision_position(tree);
+        x := tree_grid_cell_x(pos.x);
+        y := tree_grid_cell_y(pos.y);
         g_tree_grid[tree_grid_flat_index(x, y)].trees.append(tree);
     }
 
@@ -650,7 +663,8 @@ effective_backpack_capacity :: proc(player: Player) -> s64 {
 
 backpack_upgrade_cost :: proc(tier: s64) -> s64 {
     cost := (35 + tier * tier * 55) * 2;
-    if tier <= 1 return max(1, cost / 2);
+    if tier <= 1 return max(1, cost / 4);
+    if tier == 2 return max(1, cost / 2);
     return cost;
 }
 
@@ -686,10 +700,13 @@ axe_upgrade_cost :: proc(tier: s64) -> s64 {
     cost := (25 + tier * tier * 35) * 2;
     if tier <= 1 {
         current_cost := ((cost / 2) * 5 + 3) / 4;
-        return max(1, (current_cost * 23 + 19) / 20);
+        final_cost := max(1, (current_cost * 23 + 19) / 20);
+        return max(1, final_cost / 2);
     }
     current_cost := (cost * 5 + 3) / 4;
-    return (current_cost * 23 + 19) / 20;
+    final_cost := (current_cost * 23 + 19) / 20;
+    if tier == 2 return max(1, final_cost / 2);
+    return final_cost;
 }
 
 axe_chop_radius :: proc(tier: s64) -> float {
@@ -1180,7 +1197,8 @@ apply_axe_cleave :: proc(player: Player, primary: Lumber_Tree) {
     radius_d2 := radius * radius;
     frame := get_frame_number();
     damage := axe_cleave_damage(player.axe_tier);
-    query_trees_near(primary.entity.world_position, radius, ref player.nearby_tree_cache);
+    primary_pos := tree_axe_collision_position(primary);
+    query_trees_near(primary_pos, radius, ref player.nearby_tree_cache);
 
     for i: 0..cleaves - 1 {
         best: Lumber_Tree = null;
@@ -1189,7 +1207,7 @@ apply_axe_cleave :: proc(player: Player, primary: Lumber_Tree) {
             if tree == primary continue;
             if tree.is_cut || tree.is_falling continue;
             if tree.target_frame == frame continue;
-            d2 := length_squared(tree.entity.world_position - primary.entity.world_position);
+            d2 := length_squared(tree_axe_collision_position(tree) - primary_pos);
             if d2 <= best_d2 {
                 best = tree;
                 best_d2 = d2;
@@ -1319,7 +1337,7 @@ try_start_chop :: proc(player: Player) -> bool {
     for tree: player.nearby_tree_cache {
         if tree.is_cut || tree.is_falling continue;
         if tree.target_frame == frame continue;
-        d2 := length_squared(tree.entity.world_position - player.entity.world_position);
+        d2 := length_squared(tree_axe_collision_position(tree) - player.entity.world_position);
         if d2 <= best_d2 {
             best = tree;
             best_d2 = d2;
@@ -1347,7 +1365,7 @@ nearest_tree_count :: proc(player: Player) -> s64 {
     query_trees_near(player.entity.world_position, radius, ref player.nearby_tree_cache);
     for tree: player.nearby_tree_cache {
         if tree.is_cut || tree.is_falling continue;
-        if length_squared(tree.entity.world_position - player.entity.world_position) <= radius_d2 {
+        if length_squared(tree_axe_collision_position(tree) - player.entity.world_position) <= radius_d2 {
             count += 1;
         }
     }
@@ -1364,7 +1382,7 @@ find_nearest_unchopped_tree :: proc(pos: v2) -> Lumber_Tree {
             if tree == null continue;
             if tree.is_cut || tree.is_falling continue;
             if !#alive(tree.entity) continue;
-            d2 := length_squared(tree.entity.world_position - pos);
+            d2 := length_squared(tree_axe_collision_position(tree) - pos);
             if d2 < best_d2 {
                 best = tree;
                 best_d2 = d2;
@@ -1391,7 +1409,7 @@ update_helicopter_auto_fly :: proc(player: Player, dt: float) {
         return;
     }
 
-    to_target := tree.entity.world_position - player.entity.world_position;
+    to_target := tree_axe_collision_position(tree) - player.entity.world_position;
     distance := length(to_target);
     if distance <= HELICOPTER_AUTO_FLY_STOP_RADIUS return;
 
@@ -1508,7 +1526,7 @@ update_player_axe_visual :: proc(player: Player) {
 spinning_axe_tree_in_hit_zone :: proc(player: Player, tree: Lumber_Tree, axe_pos: v2, axe_dir: v2, radius: float, contact_radius: float) -> bool {
     if player == null || tree == null return false;
     player_center := player.entity.world_position + v2{0, 0.35};
-    tree_center := tree.entity.world_position + v2{0, 0.72};
+    tree_center := tree_axe_collision_position(tree) + v2{0, 0.25};
     tree_radius := spinning_axe_tree_collision_radius(tree);
     combined_radius := contact_radius + tree_radius;
 
@@ -1523,7 +1541,7 @@ spinning_axe_tree_in_hit_zone :: proc(player: Player, tree: Lumber_Tree, axe_pos
     }
 
     if length(tree_center - axe_pos) <= combined_radius return true;
-    if length(tree.entity.world_position - axe_pos) <= combined_radius * 0.78 return true;
+    if length(tree_axe_collision_position(tree) - axe_pos) <= combined_radius * 0.78 return true;
     if dist <= combined_radius return true;
     if abs(dist - radius) > combined_radius return false;
 
@@ -1791,7 +1809,7 @@ forest_cover_score_at :: proc(pos: v2, tree_cache: ref [..]Lumber_Tree) -> float
 forest_distance_slow_factor :: proc(pos: v2) -> float {
     span := max(1.0, FOREST_DISTANCE_SLOW_FULL - FOREST_DISTANCE_SLOW_START);
     linear := clamp((length(pos) - FOREST_DISTANCE_SLOW_START) / span, 0.0, 1.0);
-    return pow(linear, 0.35);
+    return pow(linear, 1.35);
 }
 
 forest_density_slow_factor :: proc(cover_score: float) -> float {
@@ -1923,11 +1941,11 @@ set_infinite_backpack_state :: proc(player: Player, enabled: bool) {
 
 infinite_backpack :: proc(player: Player, enabled: bool = true) {
     set_infinite_backpack_state(player, enabled);
-} @chat_command @any
+} @chat_command
 
 infinite_bag :: proc(player: Player, enabled: bool = true) {
     set_infinite_backpack_state(player, enabled);
-} @chat_command @any
+} @chat_command
 
 set_coins :: proc(player: Player, amount: s64 = 10000) {
     if player == null return;
@@ -1941,7 +1959,7 @@ set_coins :: proc(player: Player, amount: s64 = 10000) {
     player.dialogue_text = format_string("Gold: %", {amount});
     player.dialogue_timer = 1.5;
     spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("Gold: %", {amount}), {1.0, 0.86, 0.18, 1}, true);
-} @chat_command @any
+} @chat_command
 
 give_coins :: proc(player: Player, amount: s64 = 1000) {
     if player == null return;
@@ -1950,7 +1968,7 @@ give_coins :: proc(player: Player, amount: s64 = 1000) {
     player.dialogue_text = format_string("+% gold", {amount});
     player.dialogue_timer = 1.5;
     spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("+% gold", {amount}), {1.0, 0.86, 0.18, 1}, true);
-} @chat_command @any
+} @chat_command
 
 clear_player_gold :: proc(player: Player) {
     if player == null return;
@@ -2074,7 +2092,7 @@ reset :: proc(player: Player) {
     player.dialogue_timer = 1.8;
     player.ui_pop_timer = 0.25;
     spawn_float_text(player.entity.world_position + v2{0, 1.5}, "Progress reset", {1.0, 0.35, 0.25, 1}, true);
-} @chat_command @any
+} @chat_command
 
 set_spinning_axe_mode :: proc(player: Player, enabled: bool = true) {
     g_spinning_axe_mode = enabled;
@@ -2512,6 +2530,7 @@ Lumber_Tree :: class : Component {
     impact_spawned: bool;
     fall_anim_started: bool;
     sprite: Sprite_Renderer;
+    spine_entity: Entity;
     animator: Spine_Animator;
     last_spinning_axe_hit_at: float;
     health_bar_until: float;
@@ -2523,10 +2542,10 @@ Lumber_Tree :: class : Component {
         if tree_level > MAX_TREE_LEVEL tree_level = MAX_TREE_LEVEL;
         original_pos = entity.local_position;
         original_scale = v2{TREE_SPINE_ENTITY_SCALE, TREE_SPINE_ENTITY_SCALE};
-        entity.set_local_scale(original_scale);
         health = max_health();
         last_spinning_axe_hit_at = -SPINNING_AXE_TREE_HIT_COOLDOWN;
-        setup_tree_spine();
+        setup_tree_idle_sprite();
+        show_tree_idle_sprite();
         tree_grid_mark_dirty();
     }
 
@@ -2560,9 +2579,7 @@ Lumber_Tree :: class : Component {
         if sprite != null {
             sprite.set_enabled(true);
         }
-        if animator != null {
-            animator.set_enabled(false);
-        }
+        destroy_tree_spine_visual();
         entity.set_local_position(original_pos + TREE_IDLE_SPRITE_POSITION_OFFSET);
         entity.set_local_scale(v2{TREE_IDLE_ENTITY_SCALE, TREE_IDLE_ENTITY_SCALE});
     }
@@ -2582,16 +2599,32 @@ Lumber_Tree :: class : Component {
         if sprite != null {
             sprite.set_enabled(false);
         }
-        if animator != null {
-            animator.set_enabled(false);
+        destroy_tree_spine_visual();
+    }
+
+    destroy_tree_spine_visual :: method() {
+        if #alive(spine_entity) {
+            spine_entity.destroy();
         }
+        spine_entity = null;
+        animator = null;
     }
 
     setup_tree_spine :: method() {
         setup_tree_idle_sprite();
-        animator = entity.get_component(Spine_Animator);
-        if animator == null {
-            animator = entity.add_component(Spine_Animator);
+        if !#alive(spine_entity) {
+            spine_entity = Scene.create_entity();
+            spine_entity.set_name("Tree_Temporary_Spine_Visual");
+            spine_entity.set_parent(entity, false);
+            spine_entity.set_local_position(v2{0, 0});
+            spine_entity.set_local_rotation(0);
+            spine_entity.set_local_scale(v2{1, 1});
+            animator = spine_entity.add_component(Spine_Animator);
+        } else {
+            animator = spine_entity.get_component(Spine_Animator);
+            if animator == null {
+                animator = spine_entity.add_component(Spine_Animator);
+            }
         }
         animator.set_enabled(true);
         animator.awaken();
@@ -2609,7 +2642,6 @@ Lumber_Tree :: class : Component {
             animator.color_multiplier = tree_level_fallback_tint(tree_level);
         }
         animator.set_animation("idle", true, 0);
-        show_tree_idle_sprite();
     }
 
     force_respawn :: method() {
@@ -2629,7 +2661,8 @@ Lumber_Tree :: class : Component {
         entity.set_local_position(original_pos);
         entity.set_local_rotation(0);
         entity.set_local_scale(original_scale * 0.2);
-        setup_tree_spine();
+        setup_tree_idle_sprite();
+        show_tree_idle_sprite();
     }
 
     start_chop :: method(player: Player, start_delay: float) {
@@ -2768,7 +2801,8 @@ Lumber_Tree :: class : Component {
             entity.set_local_position(original_pos);
             entity.set_local_rotation(0);
             entity.set_local_scale(original_scale * 0.2);
-            setup_tree_spine();
+            setup_tree_idle_sprite();
+            show_tree_idle_sprite();
             spawn_float_text_for_player(chopping_player, original_pos + v2{0, 1.1}, "regrown", {0.35, 1.0, 0.35, 1}, false);
         }
         if !is_cut && !is_falling && entity.get_local_enabled() {
@@ -2807,7 +2841,8 @@ Tree_Level_Ring :: class : Component {
             }
             tree.tree_level = tree_level;
             tree.health = tree.max_health();
-            tree.setup_tree_spine();
+            tree.setup_tree_idle_sprite();
+            tree.show_tree_idle_sprite();
             current = current.get_next_sibling();
         }
         configured = true;
@@ -3492,7 +3527,7 @@ Rentable_Tree_Monster :: class : Interactable {
             if tree == null continue;
             if tree.is_cut || tree.is_falling continue;
             if !#alive(tree.entity) continue;
-            if length_squared(tree.entity.world_position - renter.entity.world_position) > smash_radius * smash_radius continue;
+            if length_squared(tree_axe_collision_position(tree) - renter.entity.world_position) > smash_radius * smash_radius continue;
             chopped_count += 1;
             tree.start_chop_damage(renter, 0.0, tree.max_health());
         }
@@ -4150,7 +4185,7 @@ Rentable_Helicopter :: class : Interactable {
             if tree.is_cut || tree.is_falling continue;
             if tree.tree_level > 3 continue;
             if !#alive(tree.entity) continue;
-            if length_squared(tree.entity.world_position - renter.entity.world_position) > clear_radius * clear_radius continue;
+            if length_squared(tree_axe_collision_position(tree) - renter.entity.world_position) > clear_radius * clear_radius continue;
             chopped_any = true;
             tree.start_chop_damage(renter, 0.0, tree.max_health());
         }
