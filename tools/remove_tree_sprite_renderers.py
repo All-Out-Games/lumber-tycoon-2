@@ -1,97 +1,178 @@
+#!/usr/bin/env python3
+"""Remove Sprite_Renderer components from tree .e scene files.
+
+By default this is a dry run. Pass --apply to write changes.
+
+Examples:
+  python tools/remove_tree_sprite_renderers.py
+  python tools/remove_tree_sprite_renderers.py --apply
+  python tools/remove_tree_sprite_renderers.py --scene-dir scene --name-filter tree --apply
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
 from pathlib import Path
+from typing import Iterable
 
 
-SCENE_DIR = Path(__file__).resolve().parents[1] / "scene"
-TREE_MARKER = '"internal_component_type": "Lumber_Tree"'
-SPRITE_MARKER = '"internal_component_type": "Sprite_Renderer"'
+SPRITE_RENDERER = "sprite_renderer"
 
 
-def split_top_level_objects(body: str) -> list[str]:
-    objects: list[str] = []
-    i = 0
-    n = len(body)
+def split_top_level_objects(text: str) -> tuple[list[str], str]:
+    """Split an .e file into 3 header lines plus top-level JSON-ish blocks.
 
-    while i < n:
-        while i < n and body[i] in " \t\r\n,":
-            i += 1
-        if i >= n:
-            break
-        if body[i] != "{":
-            raise ValueError(f"Expected object at offset {i}, found {body[i]!r}")
+    .e files in this project look like:
+      line 1: format/version
+      line 2: id
+      line 3: id
+      { entity json },
+      { component json },
+      { component json }
 
-        start = i
-        depth = 0
-        in_string = False
-        escape = False
+    This parser keeps each top-level {...} block without its separating comma.
+    """
+    lines = text.splitlines(keepends=True)
+    if len(lines) < 4:
+        return lines, ""
 
-        while i < n:
-            ch = body[i]
-            if in_string:
-                if escape:
-                    escape = False
-                elif ch == "\\":
-                    escape = True
-                elif ch == '"':
-                    in_string = False
-            else:
-                if ch == '"':
-                    in_string = True
-                elif ch == "{":
-                    depth += 1
-                elif ch == "}":
-                    depth -= 1
-                    if depth == 0:
-                        i += 1
-                        objects.append(body[start:i])
-                        break
-            i += 1
-
-        if depth != 0:
-            raise ValueError(f"Unclosed object starting at offset {start}")
-
-    return objects
+    header = lines[:3]
+    body = "".join(lines[3:])
+    return header, body
 
 
-def rewrite_entity_file(path: Path) -> int:
+def iter_object_blocks(body: str) -> Iterable[str]:
+    depth = 0
+    in_string = False
+    escape = False
+    start = None
+
+    for i, ch in enumerate(body):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                yield body[start : i + 1]
+                start = None
+
+    if depth != 0:
+        raise ValueError("unbalanced braces")
+
+
+def is_sprite_renderer_block(block: str) -> bool:
+    try:
+        obj = json.loads(block)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON block: {exc}") from exc
+
+    component_type = str(obj.get("component_type", "")).lower()
+    internal_type = str(obj.get("internal_component_type", "")).lower()
+    return component_type == SPRITE_RENDERER or internal_type == SPRITE_RENDERER
+
+
+def rewrite_e_file(path: Path) -> tuple[int, str | None]:
     original = path.read_text(encoding="utf-8")
-    if TREE_MARKER not in original or SPRITE_MARKER not in original:
-        return 0
+    header, body = split_top_level_objects(original)
+    if not body:
+        return 0, None
 
-    header_lines = original.splitlines(keepends=True)[:3]
-    body = original[len("".join(header_lines)) :]
-    objects = split_top_level_objects(body)
-
+    blocks = list(iter_object_blocks(body))
     kept: list[str] = []
     removed = 0
-    for obj in objects:
-        if SPRITE_MARKER in obj:
+
+    for block in blocks:
+        if is_sprite_renderer_block(block):
             removed += 1
         else:
-            kept.append(obj)
+            kept.append(block)
 
     if removed == 0:
-        return 0
+        return 0, None
 
-    rewritten = "".join(header_lines) + ",\n".join(kept)
-    if original.endswith("\n"):
-        rewritten += "\n"
-    path.write_text(rewritten, encoding="utf-8")
-    return removed
+    newline = "\r\n" if "\r\n" in original else "\n"
+    rewritten = "".join(header) + ("," + newline).join(kept) + newline
+    return removed, rewritten
 
 
-def main() -> None:
-    files_changed = 0
-    components_removed = 0
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Remove Sprite_Renderer components from tree .e files. Dry-run by default."
+    )
+    parser.add_argument(
+        "--scene-dir",
+        default="scene",
+        help="Directory containing .e files, relative to the current working directory unless absolute.",
+    )
+    parser.add_argument(
+        "--name-filter",
+        default="tree",
+        help="Case-insensitive substring used to select .e files by filename. Default: tree",
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Write changes. Without this flag, only reports what would change.",
+    )
+    args = parser.parse_args()
 
-    for path in sorted(SCENE_DIR.glob("*.e")):
-        removed = rewrite_entity_file(path)
-        if removed:
-            files_changed += 1
-            components_removed += removed
+    scene_dir = Path(args.scene_dir)
+    if not scene_dir.exists():
+        raise SystemExit(f"Scene directory not found: {scene_dir}")
 
-    print(f"files_changed={files_changed}")
-    print(f"components_removed={components_removed}")
+    needle = args.name_filter.lower()
+    files = [p for p in scene_dir.rglob("*.e") if needle in p.name.lower()]
+
+    changed_files = 0
+    removed_components = 0
+    errors: list[str] = []
+
+    for path in files:
+        try:
+            removed, rewritten = rewrite_e_file(path)
+        except Exception as exc:  # keep scanning and report all problem files
+            errors.append(f"{path}: {exc}")
+            continue
+
+        if removed == 0:
+            continue
+
+        changed_files += 1
+        removed_components += removed
+        if args.apply and rewritten is not None:
+            path.write_text(rewritten, encoding="utf-8", newline="")
+
+    mode = "APPLIED" if args.apply else "DRY RUN"
+    print(f"{mode}: scanned {len(files)} tree .e files")
+    print(f"{mode}: {'removed' if args.apply else 'would remove'} {removed_components} Sprite_Renderer components from {changed_files} files")
+
+    if errors:
+        print(f"Errors: {len(errors)}")
+        for error in errors[:20]:
+            print(f"  {error}")
+        if len(errors) > 20:
+            print(f"  ... and {len(errors) - 20} more")
+        return 1
+
+    if not args.apply:
+        print("Run with --apply to write the changes.")
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

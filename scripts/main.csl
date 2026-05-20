@@ -75,6 +75,9 @@ BASE_TIER_TREE_MIN_ALIVE :: 50;
 BASE_TIER_TREE_SUPPLY_CHECK_SECONDS :: 2.0;
 TREE_HEALTH :: 6;
 MAX_TREE_LEVEL :: 5;
+TREE_IDLE_ENTITY_SCALE :: 1.470;
+TREE_SPINE_ENTITY_SCALE :: 2.7;
+TREE_IDLE_SPRITE_POSITION_OFFSET :: v2{0.083, 2.182};
 INFINITE_BACKPACK_CAPACITY :: 1000000000;
 AUTO_SAWMILL_PRODUCT_ID :: "6a08faac014578603d2d145f";
 UNLIMITED_BACKPACK_PRODUCT_ID :: "6a0b73af8063e5a9ee3400fa";
@@ -156,6 +159,7 @@ g_last_sell_payout: s64;
 g_game_start_music_active: bool;
 g_game_start_music_sound_id: u64;
 tree_spine_asset: Spine_Asset;
+tree_idle_texture: Texture_Asset;
 tree_monster_spine_asset: Spine_Asset;
 chop_keybind: Keybind;
 tree_gold_material: Material;
@@ -213,6 +217,7 @@ ao_before_scene_load :: proc() {
     alien_plank_defn = Items.register_item_definition({ALIEN_PLANK_ITEM_ID, "Alien Planks", alien_plank_icon, 999, .RARE});
     Economy.register_currency(GOLD_CURRENCY, coin_icon);
     register_tree_level_materials();
+    tree_idle_texture = get_asset(Texture_Asset, "baked_tree.png");
 }
 
 ao_start :: proc() {
@@ -2506,6 +2511,7 @@ Lumber_Tree :: class : Component {
     thumped: bool;
     impact_spawned: bool;
     fall_anim_started: bool;
+    sprite: Sprite_Renderer;
     animator: Spine_Animator;
     last_spinning_axe_hit_at: float;
     health_bar_until: float;
@@ -2516,7 +2522,8 @@ Lumber_Tree :: class : Component {
         if tree_level <= 0 tree_level = 1;
         if tree_level > MAX_TREE_LEVEL tree_level = MAX_TREE_LEVEL;
         original_pos = entity.local_position;
-        original_scale = entity.local_scale;
+        original_scale = v2{TREE_SPINE_ENTITY_SCALE, TREE_SPINE_ENTITY_SCALE};
+        entity.set_local_scale(original_scale);
         health = max_health();
         last_spinning_axe_hit_at = -SPINNING_AXE_TREE_HIT_COOLDOWN;
         setup_tree_spine();
@@ -2528,15 +2535,65 @@ Lumber_Tree :: class : Component {
         return TREE_HEALTH * tree_level_health_multiplier(tree_level);
     }
 
-    setup_tree_spine :: method() {
-        sprite := entity.get_component(Sprite_Renderer);
-        if sprite != null {
-            sprite.color = {1, 1, 1, 0};
+    setup_tree_idle_sprite :: method() {
+        sprite = entity.get_component(Sprite_Renderer);
+        if sprite == null {
+            sprite = entity.add_component(Sprite_Renderer);
         }
+        if tree_idle_texture != null {
+            sprite.set_texture(tree_idle_texture);
+        }
+        sprite.depth_offset = -0.274;
+        sprite.layer = 0;
+        sprite.scale = v2{1, 1};
+        mat := tree_level_material(tree_level);
+        if mat != null {
+            sprite.set_material(mat, false);
+            sprite.color = {1, 1, 1, 1};
+        } else {
+            sprite.color = tree_level_fallback_tint(tree_level);
+        }
+    }
+
+    show_tree_idle_sprite :: method() {
+        if sprite == null setup_tree_idle_sprite();
+        if sprite != null {
+            sprite.set_enabled(true);
+        }
+        if animator != null {
+            animator.set_enabled(false);
+        }
+        entity.set_local_position(original_pos + TREE_IDLE_SPRITE_POSITION_OFFSET);
+        entity.set_local_scale(v2{TREE_IDLE_ENTITY_SCALE, TREE_IDLE_ENTITY_SCALE});
+    }
+
+    show_tree_spine :: method() {
+        if sprite != null {
+            sprite.set_enabled(false);
+        }
+        if animator != null {
+            animator.set_enabled(true);
+        }
+        entity.set_local_position(original_pos);
+        entity.set_local_scale(original_scale);
+    }
+
+    hide_tree_visuals :: method() {
+        if sprite != null {
+            sprite.set_enabled(false);
+        }
+        if animator != null {
+            animator.set_enabled(false);
+        }
+    }
+
+    setup_tree_spine :: method() {
+        setup_tree_idle_sprite();
         animator = entity.get_component(Spine_Animator);
         if animator == null {
             animator = entity.add_component(Spine_Animator);
         }
+        animator.set_enabled(true);
         animator.awaken();
         animator.set_skeleton(tree_spine_asset);
         animator.depth_offset = -0.274;
@@ -2552,6 +2609,7 @@ Lumber_Tree :: class : Component {
             animator.color_multiplier = tree_level_fallback_tint(tree_level);
         }
         animator.set_animation("idle", true, 0);
+        show_tree_idle_sprite();
     }
 
     force_respawn :: method() {
@@ -2586,6 +2644,7 @@ Lumber_Tree :: class : Component {
     start_chop_damage :: method(player: Player, start_delay: float, damage: s64, is_crit: bool = false) {
         if is_cut || is_falling return;
         if animator == null setup_tree_spine();
+        show_tree_spine();
         tree_health := max_health();
         if health <= 0 health = tree_health;
         health = max(0, health - damage);
@@ -2655,9 +2714,11 @@ Lumber_Tree :: class : Component {
                 entity.set_local_rotation(0);
                 entity.set_local_scale(original_scale);
                 if animator != null {
+                    show_tree_spine();
                     animator.scale = v2{1, 1};
                     animator.set_animation("idle", true, 0);
                 }
+                show_tree_idle_sprite();
                 return;
             }
 
@@ -2694,6 +2755,7 @@ Lumber_Tree :: class : Component {
                 entity.set_local_position(original_pos);
                 entity.set_local_rotation(0);
                 entity.set_local_scale(original_scale * 0.01);
+                hide_tree_visuals();
             }
             return;
         }
@@ -2709,9 +2771,13 @@ Lumber_Tree :: class : Component {
             setup_tree_spine();
             spawn_float_text_for_player(chopping_player, original_pos + v2{0, 1.1}, "regrown", {0.35, 1.0, 0.35, 1}, false);
         }
-        if !is_cut && entity.get_local_enabled() {
-            if entity.local_scale.x < original_scale.x {
-                entity.lerp_local_scale(original_scale, min(1.0, dt * 4.0));
+        if !is_cut && !is_falling && entity.get_local_enabled() {
+            if sprite != null && sprite.get_enabled() {
+                entity.set_local_position(original_pos + TREE_IDLE_SPRITE_POSITION_OFFSET);
+                entity.set_local_scale(v2{TREE_IDLE_ENTITY_SCALE, TREE_IDLE_ENTITY_SCALE});
+            } else if animator != null && animator.get_enabled() {
+                entity.set_local_position(original_pos);
+                entity.set_local_scale(original_scale);
             }
         }
     }
