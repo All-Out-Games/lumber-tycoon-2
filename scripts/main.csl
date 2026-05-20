@@ -18,6 +18,12 @@ BACTERIA_AMBIENT_SFX :: "ambiance_03_be7492.wav";
 ALIEN_REFINER_FLAME_SPINE :: "012MIM_Dark_Flame_Pillar_c42600/012MIM_Dark_Flame_Pillar.spine";
 ALIEN_REFINER_FLAME_ANIM :: "012MIM/Dark_Flame_Pillar_Full";
 CHEST_RESPAWN_SECONDS :: 180.0;
+REBIRTH_MAX_LEVEL :: 4;
+REBIRTH_COST_1 :: 10000;
+REBIRTH_COST_2 :: 35000;
+REBIRTH_COST_3 :: 90000;
+REBIRTH_COST_4 :: 180000;
+REBIRTH_MONEY_MULTIPLIER_STEP :: 0.75;
 HELICOPTER_RENT_COST :: 22500;
 HELICOPTER_RENT_SECONDS :: 60.0;
 HELICOPTER_CLEAR_RADIUS :: 5.5;
@@ -39,8 +45,11 @@ BACTERIA_CHASE_COOLDOWN_SECONDS :: 45.0;
 BACTERIA_PATROL_SPEED :: 2.15;
 BACTERIA_CHASE_SPEED :: 3.65;
 BACTERIA_PATROL_POINT_RADIUS :: 2.0;
+BACTERIA_PATROL_POINT_COUNT :: 41;
 BACTERIA_TAG_FLASH_SECONDS :: 0.22;
 BACTERIA_AMBIENT_RANGE_MULTIPLIER :: 2.2;
+BACTERIA_TAKEOVER_SECONDS :: 60.0;
+BACTERIA_TAKEOVER_INVISIBILITY_REASON :: "bacteria_takeover";
 MAX_AXE_TIER :: 12;
 MAX_SAWMILL_TIER :: 8;
 MAX_BACKPACK_TIER :: 15;
@@ -104,6 +113,7 @@ g_observed_sawmill_tier: s64;
 g_observed_backpack_tier: s64;
 g_observed_backpack_capacity: s64;
 g_observed_show_upgrades_menu: bool;
+g_observed_show_rebirth_menu: bool;
 g_observed_refining: bool;
 g_observed_near_tree_count: s64;
 g_observed_axe_damage: s64;
@@ -134,6 +144,14 @@ g_observed_spinning_axe_visual_scale: float;
 g_observed_spinning_axe_hits: s64;
 g_observed_near_auto_sawmill_zone: bool;
 g_observed_near_auto_sell_zone: bool;
+g_observed_rebirth_level: s64;
+g_observed_next_rebirth_cost: s64;
+g_observed_rebirth_money_multiplier: float;
+g_observed_polisher_unlocked: bool;
+g_observed_helicopter_unlocked: bool;
+g_observed_tree_monster_unlocked: bool;
+g_observed_haunts_forest: bool;
+g_observed_bacteria_takeover_active: bool;
 g_last_sell_payout: s64;
 g_game_start_music_active: bool;
 g_game_start_music_sound_id: u64;
@@ -352,6 +370,56 @@ bool_to_save_int :: proc(value: bool) -> s64 {
     return 0;
 }
 
+rebirth_cost :: proc(level: s64) -> s64 {
+    switch level {
+        case 1: return REBIRTH_COST_1;
+        case 2: return REBIRTH_COST_2;
+        case 3: return REBIRTH_COST_3;
+        case 4: return REBIRTH_COST_4;
+        default: return 0;
+    }
+}
+
+rebirth_money_multiplier_for_level :: proc(level: s64) -> float {
+    return 1.0 + clamp(level, 0, REBIRTH_MAX_LEVEL).(float) * REBIRTH_MONEY_MULTIPLIER_STEP;
+}
+
+rebirth_money_multiplier :: proc(player: Player) -> float {
+    return rebirth_money_multiplier_for_level(player_rebirth_level(player));
+}
+
+apply_rebirth_money_multiplier :: proc(player: Player, base_amount: s64) -> s64 {
+    if base_amount <= 0 return 0;
+    multiplier := rebirth_money_multiplier(player);
+    payout := (base_amount.(float) * multiplier + 0.5).(s64);
+    return max(base_amount, payout);
+}
+
+rebirth_unlock_label :: proc(level: s64) -> string {
+    switch level {
+        case 1: return "Polisher";
+        case 2: return "Helicopter";
+        case 3: return "Tree Monster";
+        case 4: return "Haunt Forest";
+        default: return "All unlocked";
+    }
+}
+
+next_rebirth_level :: proc(player: Player) -> s64 {
+    if player == null return 1;
+    if player.rebirth_level >= REBIRTH_MAX_LEVEL return 0;
+    return player.rebirth_level + 1;
+}
+
+next_rebirth_cost :: proc(player: Player) -> s64 {
+    return rebirth_cost(next_rebirth_level(player));
+}
+
+player_rebirth_level :: proc(player: Player) -> s64 {
+    if player == null return 0;
+    return clamp(player.rebirth_level, 0, REBIRTH_MAX_LEVEL);
+}
+
 player_has_auto_sawmill :: proc(player: Player) -> bool {
     if player == null return false;
     return player.owns_auto_sawmill;
@@ -369,12 +437,25 @@ player_has_unlimited_move_speed :: proc(player: Player) -> bool {
 
 player_has_alien_refiner :: proc(player: Player) -> bool {
     if player == null return false;
-    return player.alien_refiner_unlocked;
+    return player_rebirth_level(player) >= 1;
+}
+
+player_can_use_helicopter :: proc(player: Player) -> bool {
+    return player_rebirth_level(player) >= 2;
+}
+
+player_can_use_tree_monster :: proc(player: Player) -> bool {
+    return player_rebirth_level(player) >= 3;
+}
+
+player_haunts_forest :: proc(player: Player) -> bool {
+    return player_rebirth_level(player) >= REBIRTH_MAX_LEVEL;
 }
 
 save_player_progress :: proc(player: Player) {
     if player == null return;
     Save.set_int(player, "lta_progress_version", SAVE_PROGRESS_VERSION);
+    Save.set_int(player, "lta_rebirth_level", clamp(player.rebirth_level, 0, REBIRTH_MAX_LEVEL));
     Save.set_int(player, "lta_axe_tier", clamp(player.axe_tier, 1, MAX_AXE_TIER));
     Save.set_int(player, "lta_backpack_tier", clamp(player.backpack_tier, 1, MAX_BACKPACK_TIER));
     Save.set_int(player, "lta_sawmill_tier", clamp(player.sawmill_tier, 1, MAX_SAWMILL_TIER));
@@ -384,7 +465,6 @@ save_player_progress :: proc(player: Player) {
     Save.set_int(player, "lta_auto_sawmill", bool_to_save_int(player.owns_auto_sawmill));
     Save.set_int(player, "lta_unlimited_backpack", bool_to_save_int(player.owns_unlimited_backpack_product));
     Save.set_int(player, "lta_unlimited_move_speed", bool_to_save_int(player.owns_unlimited_move_speed_product));
-    Save.set_int(player, "lta_alien_refiner_unlocked", bool_to_save_int(player.alien_refiner_unlocked));
 }
 
 load_player_progress :: proc(player: Player) {
@@ -396,6 +476,7 @@ load_player_progress :: proc(player: Player) {
     }
     Save.set_int(player, "lta_progress_version", save_version);
 
+    player.rebirth_level = clamp(Save.get_int(player, "lta_rebirth_level", player.rebirth_level), 0, REBIRTH_MAX_LEVEL);
     player.axe_tier = clamp(Save.get_int(player, "lta_axe_tier", max(1, player.axe_tier)), 1, MAX_AXE_TIER);
     player.backpack_tier = clamp(Save.get_int(player, "lta_backpack_tier", max(1, player.backpack_tier)), 1, MAX_BACKPACK_TIER);
     player.sawmill_tier = clamp(Save.get_int(player, "lta_sawmill_tier", max(1, player.sawmill_tier)), 1, MAX_SAWMILL_TIER);
@@ -405,7 +486,7 @@ load_player_progress :: proc(player: Player) {
     player.owns_auto_sawmill = Save.get_int(player, "lta_auto_sawmill", 0) != 0;
     player.owns_unlimited_backpack_product = Save.get_int(player, "lta_unlimited_backpack", 0) != 0;
     player.owns_unlimited_move_speed_product = Save.get_int(player, "lta_unlimited_move_speed", 0) != 0;
-    player.alien_refiner_unlocked = Save.get_int(player, "lta_alien_refiner_unlocked", 0) != 0;
+    player.alien_refiner_unlocked = player_has_alien_refiner(player);
 
     save_player_progress(player);
 }
@@ -910,6 +991,24 @@ player_tree_monster_rented :: proc(player: Player) -> bool {
     return player.tree_monster_rental.is_rented();
 }
 
+player_bacteria_takeover_active :: proc(player: Player) -> bool {
+    if !player_ready_for_ui(player) return false;
+    if player.bacteria_takeover == null return false;
+    if !#alive(player.bacteria_takeover) return false;
+    return player.bacteria_takeover.is_taken_over_by(player);
+}
+
+finish_player_bacteria_takeover :: proc(player: Player, by_timeout: bool) {
+    if !player_ready_for_ui(player) return;
+    if player.bacteria_takeover == null return;
+    if !#alive(player.bacteria_takeover) {
+        player.bacteria_takeover = null;
+        player.remove_invisibility_reason(BACTERIA_TAKEOVER_INVISIBILITY_REASON);
+        return;
+    }
+    player.bacteria_takeover.finish_takeover(by_timeout);
+}
+
 play_sawmill_start_sfx :: proc(pos: v2) {
     play_positional_sfx("saw_loop_606dff.wav", pos, 0.11, 0.025);
 }
@@ -1324,7 +1423,7 @@ update_player_axe_visual :: proc(player: Player) {
     create_player_axe_visual(player);
     if player.axe_visual_entity == null || !#alive(player.axe_visual_entity) return;
 
-    hidden := player_helicopter_rented(player) || player_tree_monster_rented(player);
+    hidden := player_helicopter_rented(player) || player_tree_monster_rented(player) || player_bacteria_takeover_active(player);
     player.axe_visual_entity.set_local_enabled(!hidden);
     if hidden return;
 
@@ -1432,6 +1531,7 @@ update_spinning_axe :: proc(player: Player, dt: float) {
     if !spinning_axe_mode_enabled() return;
     if !player_ready_for_ui(player) return;
     if player_helicopter_rented(player) || player_tree_monster_rented(player) return;
+    if player_bacteria_takeover_active(player) return;
 
     player.spinning_axe_angle -= SPINNING_AXE_SPEED * dt;
     if player.spinning_axe_angle < 0.0 {
@@ -1595,7 +1695,8 @@ sell_planks_at_seller :: proc(player: Player, seller_pos: v2) -> bool {
     alien_removed := remove_item_count(player, alien_plank_defn, alien_planks);
     if removed <= 0 && alien_removed <= 0 return false;
 
-    payout := removed * 12 + alien_removed * 24;
+    base_payout := removed * 12 + alien_removed * 24;
+    payout := apply_rebirth_money_multiplier(player, base_payout);
     g_last_sell_payout = payout;
     Economy.deposit_currency(player, GOLD_CURRENCY, payout);
     player.has_sold_planks = true;
@@ -1846,6 +1947,81 @@ give_coins :: proc(player: Player, amount: s64 = 1000) {
     spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("+% gold", {amount}), {1.0, 0.86, 0.18, 1}, true);
 } @chat_command @any
 
+clear_player_gold :: proc(player: Player) {
+    if player == null return;
+    current_gold := Economy.get_balance(player, GOLD_CURRENCY);
+    if current_gold > 0 {
+        Economy.withdraw_currency(player, GOLD_CURRENCY, current_gold);
+    }
+}
+
+reset_core_progress_for_rebirth :: proc(player: Player) {
+    if player == null return;
+
+    if player.default_inventory != null {
+        Items.destroy_all_items(player.default_inventory);
+    }
+    clear_player_gold(player);
+
+    player.axe_tier = 1;
+    player.sawmill_tier = 1;
+    player.backpack_tier = 1;
+    player.infinite_backpack = false;
+    player.alien_refiner_unlocked = player_has_alien_refiner(player);
+    player.has_sold_planks = false;
+    player.onboarding_step = 0;
+    player.refining = false;
+    player.polishing = false;
+    player.alien_refiner_flame_working = false;
+    player.refine_timer = 0;
+    player.refine_logs_remaining = 0;
+    player.refine_logs_total = 0;
+    player.polish_timer = 0;
+    player.polish_planks_remaining = 0;
+    player.polish_planks_total = 0;
+    player.auto_refine_timer = 0;
+    player.show_upgrade_shop = false;
+    player.show_rebirth_confirm = false;
+    player.show_exit_helicopter_confirm = false;
+    player.helicopter_auto_fly = false;
+    stop_sawmill_processing_loop(player);
+    stop_polishing_processing_loop(player);
+}
+
+perform_rebirth :: proc(player: Player) -> bool {
+    if player == null return false;
+    next_level := next_rebirth_level(player);
+    if next_level <= 0 return false;
+
+    cost := rebirth_cost(next_level);
+    if !Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
+        player.dialogue_text = format_string("Need % gold", {cost});
+        player.dialogue_timer = 1.4;
+        play_backpack_full_dud_sfx(player.entity.world_position);
+        return false;
+    }
+
+    if player_helicopter_rented(player) {
+        player.helicopter_rental.finish_rental(false);
+    }
+    if player_tree_monster_rented(player) {
+        player.tree_monster_rental.finish_rental(false);
+    }
+    finish_player_bacteria_takeover(player, false);
+
+    player.rebirth_level = next_level;
+    reset_core_progress_for_rebirth(player);
+    save_player_progress(player);
+
+    player.dialogue_text = format_string("Rebirth %", {player.rebirth_level});
+    player.dialogue_timer = 1.8;
+    player.ui_pop_timer = 0.35;
+    spawn_float_text(player.entity.world_position + v2{0, 1.55}, format_string("Rebirth %", {player.rebirth_level}), {0.55, 1.0, 0.92, 1}, true);
+    spawn_juice_particles(player.entity.world_position + v2{0, 0.8}, 4 + player.rebirth_level, 24, {0.55, 1.0, 0.92, 0.85}, true);
+    play_purchase_item_sfx(player);
+    return true;
+}
+
 reset :: proc(player: Player) {
     if player == null return;
 
@@ -1855,17 +2031,16 @@ reset :: proc(player: Player) {
     if player_tree_monster_rented(player) {
         player.tree_monster_rental.finish_rental(false);
     }
+    finish_player_bacteria_takeover(player, false);
 
     if player.default_inventory != null {
         Items.destroy_all_items(player.default_inventory);
     }
     Economy.delete_save_data(player);
-    current_gold := Economy.get_balance(player, GOLD_CURRENCY);
-    if current_gold > 0 {
-        Economy.withdraw_currency(player, GOLD_CURRENCY, current_gold);
-    }
+    clear_player_gold(player);
     Save.delete_all_keys(player);
 
+    player.rebirth_level = 0;
     player.axe_tier = 1;
     player.sawmill_tier = 1;
     player.backpack_tier = 1;
@@ -1885,6 +2060,7 @@ reset :: proc(player: Player) {
     player.auto_refine_timer = 0;
     player.show_upgrade_shop = false;
     player.show_upgrades_menu = false;
+    player.show_rebirth_confirm = false;
     player.show_exit_helicopter_confirm = false;
     player.helicopter_auto_fly = false;
     save_player_progress(player);
@@ -1940,6 +2116,7 @@ Chop_Ability :: class : Ability_Base {
     can_use :: method() -> bool {
         if spinning_axe_mode_enabled() return false;
         if player_helicopter_rented(player) return false;
+        if player_bacteria_takeover_active(player) return false;
         return true;
     }
 
@@ -2029,9 +2206,11 @@ Auto_Fly_Helicopter_Ability :: class : Ability_Base {
 
 // Per player state
 Player :: class : Player_Base {
+    rebirth_level: s64 @ao_serialize;
     axe_tier: s64 @ao_serialize;
     show_upgrade_shop: bool @ao_serialize;
     show_upgrades_menu: bool @ao_serialize;
+    show_rebirth_confirm: bool @ao_serialize;
     sawmill_tier: s64 @ao_serialize;
     backpack_tier: s64 @ao_serialize;
     infinite_backpack: bool @ao_serialize;
@@ -2065,6 +2244,7 @@ Player :: class : Player_Base {
     navmesh_lock_applied: bool;
     helicopter_rental: Rentable_Helicopter;
     tree_monster_rental: Rentable_Tree_Monster;
+    bacteria_takeover: Bacteria_Monster;
     axe_visual_entity: Entity;
     axe_visual_sprite: Sprite_Renderer;
     axe_visual_material_level: s64;
@@ -2121,8 +2301,17 @@ Player :: class : Player_Base {
         g_observed_backpack_tier = backpack_tier;
         g_observed_backpack_capacity = effective_backpack_capacity(this);
         g_observed_show_upgrades_menu = show_upgrades_menu;
+        g_observed_show_rebirth_menu = show_rebirth_confirm;
         g_observed_refining = refining;
         g_observed_near_tree_count = nearest_tree_count(this);
+        g_observed_rebirth_level = player_rebirth_level(this);
+        g_observed_next_rebirth_cost = next_rebirth_cost(this);
+        g_observed_rebirth_money_multiplier = rebirth_money_multiplier(this);
+        g_observed_polisher_unlocked = player_has_alien_refiner(this);
+        g_observed_helicopter_unlocked = player_can_use_helicopter(this);
+        g_observed_tree_monster_unlocked = player_can_use_tree_monster(this);
+        g_observed_haunts_forest = player_haunts_forest(this);
+        g_observed_bacteria_takeover_active = player_bacteria_takeover_active(this);
         g_observed_axe_damage = axe_damage(axe_tier);
         g_observed_axe_hits_to_chop = axe_hits_to_chop(axe_tier);
         g_observed_axe_radius = axe_chop_radius(axe_tier);
@@ -2257,7 +2446,7 @@ Player :: class : Player_Base {
         }
 
         if is_local_or_server() {
-            if !spinning_axe_mode_enabled() {
+            if !spinning_axe_mode_enabled() && !player_bacteria_takeover_active(this) {
                 draw_ability_button(this, Chop_Ability, 0);
             }
             if player_helicopter_rented(this) {
@@ -2266,6 +2455,7 @@ Player :: class : Player_Base {
             }
             draw_lumber_inventory(this);
             draw_lumber_topbar(this);
+            draw_rebirth_hud_button(this);
             draw_global_top_message(this);
             draw_lumber_world_overlays(this);
             if show_upgrades_menu {
@@ -2274,10 +2464,14 @@ Player :: class : Player_Base {
             if show_exit_helicopter_confirm {
                 draw_exit_helicopter_confirm(this);
             }
+            if show_rebirth_confirm {
+                draw_rebirth_confirm(this);
+            }
         }
     }
 
     ao_end :: method() {
+        finish_player_bacteria_takeover(this, false);
         stop_sawmill_processing_loop(this);
         stop_polishing_processing_loop(this);
         if axe_visual_entity != null && #alive(axe_visual_entity) {
@@ -2753,8 +2947,8 @@ Lumber_Sawmill :: class : Component {
 Polishing_Machine :: class : Interactable {
     ao_start :: method() {
         this.set_listener(this);
-        this.set_text(format_string("Unlock %", {ALIEN_REFINER_UNLOCK_COST}));
-        this.set_hold_text("Unlock");
+        this.set_text("Requires rebirth 1");
+        this.set_hold_text("Locked");
         required_hold_time = 0.35;
         radius = 2.4;
         priority = 24;
@@ -2852,36 +3046,15 @@ Polishing_Machine :: class : Interactable {
     }
 
     can_use :: method(player: Player) -> bool {
-        if player == null return false;
-        return !player_has_alien_refiner(player);
+        return false;
     }
 
     on_interact :: method(player: Player) {
         if player == null return;
         if player_has_alien_refiner(player) return;
-
-        if !Economy.can_withdraw_currency(player, GOLD_CURRENCY, ALIEN_REFINER_UNLOCK_COST) {
-            player.dialogue_text = format_string("Need % gold", {ALIEN_REFINER_UNLOCK_COST});
-            player.dialogue_timer = 1.5;
-            spawn_float_text_for_player(player, entity.world_position + v2{0, 1.55}, format_string("Need %", {ALIEN_REFINER_UNLOCK_COST}), {1.0, 0.22, 0.16, 1}, true);
-            if player_local_feedback(player) {
-                play_backpack_full_dud_sfx(player.entity.world_position);
-            }
-            return;
-        }
-
-        Economy.withdraw_currency(player, GOLD_CURRENCY, ALIEN_REFINER_UNLOCK_COST);
-        player.alien_refiner_unlocked = true;
-        save_player_progress(player);
-        if player_local_feedback(player) {
-            apply_locked_visual(true);
-        }
-        player.dialogue_text = "Alien refiner unlocked.";
-        player.dialogue_timer = 1.8;
-        player.ui_pop_timer = 0.25;
-        spawn_float_text_for_player(player, entity.world_position + v2{0, 1.55}, "Alien refiner", {0.42, 1.0, 0.88, 1}, true);
-        spawn_juice_particles_for_player(player, entity.world_position + v2{0, 0.75}, 3, 18, {0.42, 1.0, 0.88, 0.8}, true);
-        play_purchase_item_sfx(player);
+        player.dialogue_text = "Requires rebirth 1";
+        player.dialogue_timer = 1.4;
+        play_backpack_full_dud_sfx(player.entity.world_position);
     }
 
     ao_end :: method() {
@@ -2926,7 +3099,8 @@ Coin_Chest :: class : Interactable {
         open_count += 1;
         respawn_at = get_time() + respawn_seconds;
         rng := rng_root_seed() + entity.id + open_count.(u64) * 7919;
-        payout := rng_range_int(ref rng, min_gold, max_gold).(s64);
+        base_payout := rng_range_int(ref rng, min_gold, max_gold).(s64);
+        payout := apply_rebirth_money_multiplier(player, base_payout);
         Economy.deposit_currency(player, GOLD_CURRENCY, payout);
         spawn_float_text(entity.world_position + v2{0, 1.2}, format_string("+% gold", {payout}), {1.0, 0.86, 0.18, 1}, true);
         spawn_juice_particles(entity.world_position + v2{0, 0.35}, 4, 18, {1.0, 0.82, 0.18, 0.85}, true);
@@ -3157,10 +3331,17 @@ Rentable_Tree_Monster :: class : Interactable {
     }
 
     can_use :: method(player: Player) -> bool {
+        if !player_can_use_tree_monster(player) return false;
         return !is_rented();
     }
 
     on_interact :: method(player: Player) {
+        if !player_can_use_tree_monster(player) {
+            player.dialogue_text = "Requires rebirth 3";
+            player.dialogue_timer = 1.4;
+            play_backpack_full_dud_sfx(player.entity.world_position);
+            return;
+        }
         if is_rented() return;
         if player.helicopter_rental != null && player.helicopter_rental.is_rented() {
             player.dialogue_text = "Land first.";
@@ -3292,7 +3473,7 @@ Rentable_Tree_Monster :: class : Interactable {
     }
 }
 
-Bacteria_Monster :: class : Component {
+Bacteria_Monster :: class : Interactable {
     patrol_index: s64 @ao_serialize;
     animator: Spine_Animator;
     navmesh: Navmesh;
@@ -3305,8 +3486,19 @@ Bacteria_Monster :: class : Component {
     using_run_anim: bool;
     facing_left: bool;
     ambient_sound_id: u64;
+    controller: Player;
+    takeover_until: float;
+    last_controller_pos: v2;
+    takeover_pulse: float;
 
     ao_start :: method() {
+        this.set_listener(this);
+        this.set_text("Take Over");
+        this.set_hold_text("Take Over");
+        required_hold_time = 0.25;
+        radius = 2.65;
+        priority = 37;
+
         animator = entity.get_component(Spine_Animator);
         if animator == null {
             animator = entity.add_component(Spine_Animator);
@@ -3323,11 +3515,83 @@ Bacteria_Monster :: class : Component {
 
         navmesh = get_world_lumber_navmesh();
         if patrol_index <= 0 {
-            patrol_index = (entity.id % 8).(s64) + 1;
+            patrol_index = (entity.id % BACTERIA_PATROL_POINT_COUNT).(s64) + 1;
         }
         current_target = bacteria_patrol_point(patrol_index);
         current_target = closest_navmesh_point(navmesh, current_target, ref triangle_hint);
         ensure_ambient_loop();
+    }
+
+    is_taken_over :: method() -> bool {
+        if controller == null return false;
+        if !#alive(controller) return false;
+        if !#alive(controller.entity) return false;
+        return get_time() < takeover_until;
+    }
+
+    is_taken_over_by :: method(player: Player) -> bool {
+        if player == null return false;
+        if controller != player return false;
+        return is_taken_over();
+    }
+
+    can_use :: method(player: Player) -> bool {
+        if !player_haunts_forest(player) return false;
+        if is_taken_over() return false;
+        if player_bacteria_takeover_active(player) return false;
+        return true;
+    }
+
+    on_interact :: method(player: Player) {
+        if !player_haunts_forest(player) {
+            player.dialogue_text = "Requires rebirth 4";
+            player.dialogue_timer = 1.4;
+            play_backpack_full_dud_sfx(player.entity.world_position);
+            return;
+        }
+        if is_taken_over() || player_bacteria_takeover_active(player) return;
+        start_takeover(player);
+    }
+
+    start_takeover :: method(player: Player) {
+        if player == null || !#alive(player.entity) return;
+
+        finish_player_bacteria_takeover(player, false);
+        controller = player;
+        player.bacteria_takeover = this;
+        player.add_invisibility_reason(BACTERIA_TAKEOVER_INVISIBILITY_REASON);
+        takeover_until = get_time() + BACTERIA_TAKEOVER_SECONDS;
+        last_controller_pos = player.entity.world_position;
+        chase_target = null;
+        chase_until = 0.0;
+        chase_cooldown_until = takeover_until;
+        hit_cooldown_until = takeover_until;
+        current_target = player.entity.world_position;
+        entity.set_local_position(player.entity.world_position);
+        player.dialogue_text = "Haunting";
+        player.dialogue_timer = 1.3;
+        spawn_float_text_for_player(player, entity.world_position + v2{0, 1.55}, "Take Over", {0.55, 1.0, 0.35, 1}, true);
+        spawn_juice_particles_for_player(player, entity.world_position + v2{0, 0.65}, 4, 22, {0.35, 1.0, 0.35, 0.82}, true);
+        play_bacteria_tag_sfx(player);
+    }
+
+    finish_takeover :: method(by_timeout: bool) {
+        old_controller := controller;
+        if old_controller != null && #alive(old_controller) {
+            old_controller.remove_invisibility_reason(BACTERIA_TAKEOVER_INVISIBILITY_REASON);
+            if old_controller.bacteria_takeover == this old_controller.bacteria_takeover = null;
+            if by_timeout && #alive(old_controller.entity) {
+                old_controller.dialogue_text = "Haunt faded";
+                old_controller.dialogue_timer = 1.2;
+            }
+        }
+        controller = null;
+        takeover_until = 0.0;
+        chase_target = null;
+        choose_next_patrol_target();
+        if animator != null {
+            animator.color_multiplier = {1, 1, 1, 1};
+        }
     }
 
     ao_update :: method(dt: float) {
@@ -3338,6 +3602,13 @@ Bacteria_Monster :: class : Component {
         }
 
         now := get_time();
+        if is_taken_over() {
+            update_takeover(dt);
+            return;
+        } else if controller != null {
+            finish_takeover(true);
+        }
+
         if chase_target == null || !#alive(chase_target) || !#alive(chase_target.entity) || now >= chase_until {
             if chase_target != null {
                 chase_target = null;
@@ -3353,6 +3624,7 @@ Bacteria_Monster :: class : Component {
                 if player == null continue;
                 if !#alive(player.entity) continue;
                 if player_helicopter_rented(player) || player_tree_monster_rented(player) continue;
+                if player_haunts_forest(player) || player_bacteria_takeover_active(player) continue;
                 d2 := length_squared(player.entity.world_position - entity.world_position);
                 if d2 <= best_d2 {
                     best = player;
@@ -3375,6 +3647,12 @@ Bacteria_Monster :: class : Component {
         move_toward_target(target, speed, dt);
 
         if chase_target != null && #alive(chase_target) && #alive(chase_target.entity) {
+            if player_haunts_forest(chase_target) {
+                chase_target = null;
+                chase_cooldown_until = now + BACTERIA_CHASE_COOLDOWN_SECONDS;
+                choose_next_patrol_target();
+                return;
+            }
             if length(chase_target.entity.world_position - entity.world_position) <= BACTERIA_HIT_RADIUS && now >= hit_cooldown_until {
                 hit_cooldown_until = now + 1.0;
                 send_player_to_base(chase_target);
@@ -3384,6 +3662,39 @@ Bacteria_Monster :: class : Component {
             }
         } else if length(entity.world_position - current_target) <= BACTERIA_PATROL_POINT_RADIUS {
             choose_next_patrol_target();
+        }
+    }
+
+    update_takeover :: method(dt: float) {
+        if controller == null || !#alive(controller.entity) {
+            finish_takeover(false);
+            return;
+        }
+
+        takeover_pulse += dt;
+        controller_pos := controller.entity.world_position;
+        delta := controller_pos - last_controller_pos;
+        moving := length_squared(delta) > 0.0004;
+        if delta.x < -0.02 {
+            facing_left = true;
+        } else if delta.x > 0.02 {
+            facing_left = false;
+        }
+        last_controller_pos = controller_pos;
+
+        next_pos := closest_navmesh_point(navmesh, controller_pos, ref triangle_hint);
+        entity.set_local_position(next_pos);
+        sx := abs(entity.local_scale.x);
+        if sx <= 0.01 sx = 1.0;
+        sy := entity.local_scale.y;
+        if sy == 0.0 sy = 1.0;
+        if facing_left sx = -sx;
+        entity.set_local_scale(v2{sx, sy});
+        set_moving_animation(moving);
+
+        if animator != null {
+            glow := 1.0 + sin(takeover_pulse * 7.0) * 0.14;
+            animator.color_multiplier = {glow, 1.0, glow, 1.0};
         }
     }
 
@@ -3445,12 +3756,13 @@ Bacteria_Monster :: class : Component {
     }
 
     ao_end :: method() {
+        finish_takeover(false);
         stop_ambient_loop();
     }
 
     choose_next_patrol_target :: method() {
         patrol_index += 1;
-        if patrol_index > 8 patrol_index = 1;
+        if patrol_index > BACTERIA_PATROL_POINT_COUNT patrol_index = 1;
         current_target = bacteria_patrol_point(patrol_index);
         current_target = closest_navmesh_point(navmesh, current_target, ref triangle_hint);
     }
@@ -3467,14 +3779,47 @@ closest_navmesh_point :: proc(navmesh: Navmesh, pos: v2, triangle_hint: ref s64)
 
 bacteria_patrol_point :: proc(index: s64) -> v2 {
     switch index {
-        case 1: return v2{-50, -31};
-        case 2: return v2{-48, 26};
-        case 3: return v2{-24, 34};
-        case 4: return v2{8, 32};
-        case 5: return v2{42, 30};
-        case 6: return v2{52, -6};
-        case 7: return v2{22, -34};
-        default: return v2{-18, -35};
+        case 1: return v2{-32, 32};
+        case 2: return v2{32, 32};
+        case 3: return v2{32, 26};
+        case 4: return v2{73, 26};
+        case 5: return v2{79, 10};
+        case 6: return v2{32, 10};
+        case 7: return v2{32, -6};
+        case 8: return v2{77, -6};
+        case 9: return v2{74, -22};
+        case 10: return v2{32, -22};
+        case 11: return v2{32, -32};
+        case 12: return v2{-32, -32};
+        case 13: return v2{-32, -22};
+        case 14: return v2{-83, -22};
+        case 15: return v2{-83, -6};
+        case 16: return v2{-32, -6};
+        case 17: return v2{-32, 10};
+        case 18: return v2{-82, 10};
+        case 19: return v2{-81, 26};
+        case 20: return v2{-32, 26};
+        case 21: return v2{-32, 32};
+        case 22: return v2{-32, 42};
+        case 23: return v2{32, 42};
+        case 24: return v2{64, 42};
+        case 25: return v2{53, 58};
+        case 26: return v2{-48, 58};
+        case 27: return v2{-71, 42};
+        case 28: return v2{-32, 42};
+        case 29: return v2{-32, 32};
+        case 30: return v2{32, 32};
+        case 31: return v2{32, -38};
+        case 32: return v2{68, -38};
+        case 33: return v2{60, -54};
+        case 34: return v2{-55, -54};
+        case 35: return v2{-78, -38};
+        case 36: return v2{-32, -38};
+        case 37: return v2{-32, -43};
+        case 38: return v2{32, -43};
+        case 39: return v2{32, -38};
+        case 40: return v2{-32, -38};
+        default: return v2{-32, -32};
     }
 }
 
@@ -3493,6 +3838,7 @@ draw_bacteria_tag_post_fx :: proc(player: Player) {
 
 send_player_to_base :: proc(player: Player) {
     if player == null || !#alive(player.entity) return;
+    if player_haunts_forest(player) return;
     player.entity.set_local_position(v2{0, 0});
     player.dialogue_text = "Back to base!";
     player.dialogue_timer = 1.4;
@@ -3649,10 +3995,17 @@ Rentable_Helicopter :: class : Interactable {
     }
 
     can_use :: method(player: Player) -> bool {
+        if !player_can_use_helicopter(player) return false;
         return !is_rented();
     }
 
     on_interact :: method(player: Player) {
+        if !player_can_use_helicopter(player) {
+            player.dialogue_text = "Requires rebirth 2";
+            player.dialogue_timer = 1.4;
+            play_backpack_full_dud_sfx(player.entity.world_position);
+            return;
+        }
         if is_rented() return;
         if !Economy.can_withdraw_currency(player, GOLD_CURRENCY, rent_cost) {
             player.dialogue_text = format_string("Need % gold", {rent_cost});
@@ -3833,6 +4186,10 @@ stats_hud_rect :: proc() -> Rect {
     return UI.get_safe_screen_rect().bottom_left_rect().grow_top(102).grow_right(589).offset(12, 12);
 }
 
+rebirth_hud_button_rect :: proc() -> Rect {
+    return UI.get_safe_screen_rect().bottom_left_rect().grow_top(96).grow_right(220).offset(12, 122);
+}
+
 draw_lumber_topbar :: proc(player: Player) {
     if !player_ready_for_ui(player) return;
     UIK.begin(UIK.window(stats_hud_rect()));
@@ -3901,6 +4258,33 @@ draw_lumber_topbar :: proc(player: Player) {
     }
 }
 
+draw_rebirth_hud_button :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    next_level := next_rebirth_level(player);
+
+    UIK.begin(UIK.window(rebirth_hud_button_rect()));
+
+    coin_icon := get_asset(Texture_Asset, "$AO/ui/kit/Icons/coin/coin_icon_b.png");
+    bd := UIK.widget_desc_button_default(.BUTTON_BASIC_SKEW_PURPLE);
+    if next_level > 0 && Economy.can_withdraw_currency(player, GOLD_CURRENCY, rebirth_cost(next_level)) {
+        bd = UIK.widget_desc_button_auto_default(.BUTTON_BASIC_SKEW_WHITE);
+        pulse := sin(get_time() * 4.0) * 0.5 + 0.5;
+        bd.panel.tint = {lerp(0.72, 1.0, pulse), 1.0, lerp(0.84, 1.0, pulse), 1.0};
+    } else if next_level <= 0 {
+        bd = UIK.widget_desc_button_default(.BUTTON_BASIC_SKEW_GREEN);
+    }
+    bd.panel.width = UIK.flex(1);
+    bd.panel.height = UIK.flex(1);
+    rebirth_handle := UIK.icon_button_label("rebirth_buy", coin_icon, "Rebirth", bd);
+
+    UIK.end();
+
+    if UIK.clicked(rebirth_handle) {
+        player.show_rebirth_confirm = true;
+        if player.is_local() play_ui_sfx("click_6d65ee.wav", 0.16, 0.02);
+    }
+}
+
 draw_global_top_message :: proc(player: Player) {
     if !player_ready_for_ui(player) return;
 
@@ -3927,9 +4311,9 @@ draw_lumber_world_overlays :: proc(player: Player) {
     if !player_ready_for_ui(player) return;
     draw_sawmill_progress_bar(player);
     draw_polishing_progress_bar(player);
-    draw_helicopter_fuel_bars();
-    draw_tree_monster_timer_bars();
-    draw_vendor_world_labels();
+    draw_helicopter_fuel_bars(player);
+    draw_tree_monster_timer_bars(player);
+    draw_vendor_world_labels(player);
     draw_recent_tree_health_bars(player);
 
     if !should_draw_goal_arrow(player) {
@@ -3991,10 +4375,14 @@ draw_recent_tree_health_bars :: proc(player: Player) {
     }
 }
 
-draw_helicopter_fuel_bars :: proc() {
+draw_helicopter_fuel_bars :: proc(player: Player) {
     for heli: component_iterator(Rentable_Helicopter) {
         if !heli.is_rented() {
-            spawn_text_world_scaled(heli.entity.world_position + v2{0, 1.6}, format_string("Rent %", {HELICOPTER_RENT_COST}), {1.0, 0.90, 0.25, 1}, 1.15);
+            if !player_can_use_helicopter(player) {
+                spawn_text_world_scaled(heli.entity.world_position + v2{0, 1.6}, "Requires rebirth 2", {1.0, 0.55, 0.25, 1}, 0.92);
+            } else {
+                spawn_text_world_scaled(heli.entity.world_position + v2{0, 1.6}, format_string("Rent %", {heli.rent_cost}), {1.0, 0.90, 0.25, 1}, 1.15);
+            }
             continue;
         }
 
@@ -4012,10 +4400,14 @@ draw_helicopter_fuel_bars :: proc() {
     }
 }
 
-draw_tree_monster_timer_bars :: proc() {
+draw_tree_monster_timer_bars :: proc(player: Player) {
     for monster: component_iterator(Rentable_Tree_Monster) {
         if !monster.is_rented() {
-            spawn_text_world_scaled(monster.entity.world_position + v2{0, 1.75}, format_string("Rent %", {TREE_MONSTER_RENT_COST}), {0.55, 1.0, 0.32, 1}, 1.12);
+            if !player_can_use_tree_monster(player) {
+                spawn_text_world_scaled(monster.entity.world_position + v2{0, 1.75}, "Requires rebirth 3", {1.0, 0.55, 0.25, 1}, 0.92);
+            } else {
+                spawn_text_world_scaled(monster.entity.world_position + v2{0, 1.75}, format_string("Rent %", {monster.rent_cost}), {0.55, 1.0, 0.32, 1}, 1.12);
+            }
             continue;
         }
 
@@ -4085,7 +4477,138 @@ draw_exit_helicopter_confirm :: proc(player: Player) {
     }
 }
 
-draw_vendor_world_labels :: proc() {
+draw_rebirth_confirm :: proc(player: Player) {
+    if !player_ready_for_ui(player) return;
+    next_level := next_rebirth_level(player);
+    gold := Economy.get_balance(player, GOLD_CURRENCY);
+    cost := rebirth_cost(next_level);
+    can_rebirth := next_level > 0 && Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost);
+
+    UIK.begin(UIK.modal(UIK.rect_window_small(), 25));
+
+    shell := UIK.panel_modal(.BROWN, 10, v4{14, 14, 14, 14});
+    shell.gap = 8;
+    UIK.panel_begin(shell);
+
+    title := "Rebirth";
+    if next_level > 0 {
+        title = format_string("Rebirth %", {next_level});
+    } else {
+        title = "Max Rebirth";
+    }
+    title_desc := UIK.title_area_desc(title);
+    title_desc.style = .NONE;
+    exit_handle := UIK.title_area(title_desc);
+
+    body := UIK.layout_column();
+    body.width = UIK.flex(1);
+    body.height = UIK.fit();
+    body.gap = 10;
+    body.padding = v4{2, 2, 2, 2};
+    UIK.panel_begin(body);
+
+    current_mult := format_float(rebirth_money_multiplier(player), decimals=2);
+    if next_level > 0 {
+        next_mult := format_float(rebirth_money_multiplier_for_level(next_level), decimals=2);
+
+        progress := clamp(gold.(float) / max(1, cost).(float), 0.0, 1.0);
+        cost_card := UIK.panel_interior(.INSET);
+        cost_card.width = UIK.flex(1);
+        cost_card.height = UIK.pixels(100);
+        cost_card.padding = v4{12, 8, 12, 8};
+        cost_card.gap = 5;
+        UIK.panel_begin(cost_card);
+        UIK.text(format_string("% / % Gold", {gold, cost}), UIK.text_title());
+        UIK.progress_bar(UIK.panel_progress_bar(.PROGRESS_BAR_STYLE_1, progress, {1.0, 0.86, 0.18, 1}, UIK.flex(1), UIK.pixels(16)));
+        if !can_rebirth {
+            missing := max(0, cost - gold);
+            UIK.text(format_string("% Gold short", {missing}), UIK.text_body());
+        } else {
+            UIK.text("Progress resets", UIK.text_body());
+        }
+        UIK.panel_end();
+
+        rewards := UIK.layout_row(UIK.flex(1), UIK.pixels(84), 8);
+        UIK.panel_begin(rewards);
+
+        access_card := UIK.panel_interior(.INSET);
+        access_card.width = UIK.flex(1);
+        access_card.height = UIK.flex(1);
+        access_card.padding = v4{10, 7, 10, 7};
+        access_card.gap = 3;
+        UIK.panel_begin(access_card);
+        UIK.text("Unlock", UIK.text_body());
+        UIK.text(rebirth_unlock_label(next_level), UIK.text_body());
+        UIK.panel_end();
+
+        mult_card := UIK.panel_interior(.INSET);
+        mult_card.width = UIK.flex(1);
+        mult_card.height = UIK.flex(1);
+        mult_card.padding = v4{10, 7, 10, 7};
+        mult_card.gap = 3;
+        UIK.panel_begin(mult_card);
+        UIK.text("Gold", UIK.text_body());
+        UIK.text(format_string("x% -> x%", {current_mult, next_mult}), UIK.text_body());
+        UIK.panel_end();
+        UIK.panel_end();
+    } else {
+        complete_card := UIK.panel_interior(.INSET);
+        complete_card.width = UIK.flex(1);
+        complete_card.height = UIK.pixels(148);
+        complete_card.padding = v4{12, 10, 12, 10};
+        complete_card.gap = 6;
+        UIK.panel_begin(complete_card);
+        UIK.text("All access unlocked", UIK.text_title());
+        UIK.text(format_string("Gold multiplier x%", {current_mult}), UIK.text_title());
+        UIK.text("Polisher, helicopter, monster, haunt.", UIK.text_body());
+        UIK.panel_end();
+    }
+
+    UIK.panel_end();
+
+    row := UIK.layout_row(UIK.flex(1), UIK.fit(), 14);
+    UIK.panel_begin(row);
+
+    cancel_desc := UIK.widget_desc_button_default(.BUTTON_BASIC_GREEN);
+    cancel_desc.panel.width = UIK.flex(1);
+    cancel_desc.panel.height = UIK.pixels(64);
+    cancel_btn := UIK.button("rebirth_cancel", "Close", cancel_desc);
+
+    confirm_desc := UIK.widget_desc_button_default(.BUTTON_BASIC_RED);
+    confirm_label := "Rebirth";
+    if !can_rebirth {
+        confirm_desc = UIK.widget_desc_button_default(.BUTTON_BASIC_GREY);
+        if next_level <= 0 {
+            confirm_label = "Complete";
+        } else {
+            confirm_label = "Not Ready";
+        }
+    }
+    confirm_desc.panel.width = UIK.flex(1);
+    confirm_desc.panel.height = UIK.pixels(64);
+    confirm_btn := UIK.button("rebirth_confirm", confirm_label, confirm_desc);
+
+    UIK.panel_end();
+    UIK.panel_end();
+    UIK.end();
+
+    if UIK.clicked(exit_handle) || UIK.clicked(cancel_btn) {
+        player.show_rebirth_confirm = false;
+        if player.is_local() play_ui_sfx("click_6d65ee.wav", 0.16, 0.02);
+    }
+    confirm_clicked := UIK.clicked(confirm_btn);
+    if confirm_clicked && can_rebirth {
+        perform_rebirth(player);
+        player.show_rebirth_confirm = false;
+        if player.is_local() play_ui_sfx("click_6d65ee.wav", 0.18, 0.02);
+    } else if confirm_clicked && next_level > 0 {
+        player.dialogue_text = "Need more gold.";
+        player.dialogue_timer = 1.4;
+        play_backpack_full_dud_sfx(player.entity.world_position);
+    }
+}
+
+draw_vendor_world_labels :: proc(player: Player) {
     for sawmill: component_iterator(Lumber_Sawmill) {
         pos := sawmill.entity.world_position;
         spawn_text_world_scaled(pos + v2{0, 1.575}, "Refine", {0.95, 0.82, 0.36, 1}, 1.32);
@@ -4093,7 +4616,11 @@ draw_vendor_world_labels :: proc() {
 
     for polisher: component_iterator(Polishing_Machine) {
         pos := polisher.entity.world_position;
-        spawn_text_world_scaled(pos + v2{0, 1.575}, "Polish", {0.78, 0.25, 1.0, 1}, 1.32);
+        if player_has_alien_refiner(player) {
+            spawn_text_world_scaled(pos + v2{0, 1.575}, "Polish", {0.78, 0.25, 1.0, 1}, 1.32);
+        } else {
+            spawn_text_world_scaled(pos + v2{0, 1.575}, "Requires rebirth 1", {1.0, 0.55, 0.25, 1}, 0.92);
+        }
     }
 
     for seller: component_iterator(Plank_Seller) {
@@ -4343,6 +4870,12 @@ draw_upgrades_menu :: proc(player: Player) {
     saw_icon := get_asset(Texture_Asset, "Sawmill_cc8b36.png");
     gold := Economy.get_balance(player, GOLD_CURRENCY);
 
+    content := UIK.layout_column();
+    content.width = UIK.flex(1);
+    content.height = UIK.flex(1);
+    content.gap = 8;
+    UIK.list_begin("upgrades_scroll", content);
+
     axe_row := UIK.panel_interior(.INSET);
     axe_row.width = UIK.flex(1);
     axe_row.height = UIK.pixels(106);
@@ -4588,6 +5121,7 @@ draw_upgrades_menu :: proc(player: Player) {
     UIK.panel_end();
 
     UIK.panel_end();
+    UIK.list_end();
     UIK.panel_end();
     UIK.end();
 

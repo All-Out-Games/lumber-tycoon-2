@@ -1,0 +1,37 @@
+test_rebirth_defaults_lock_late_game_tools :: proc() {
+    Test.teleport({0, 0});
+    Test.wait_seconds(0.5);
+    Test.assert_var_int("starts at rebirth 0", "g_observed_rebirth_level", 0);
+    Test.assert_var_int("first rebirth costs 10000", "g_observed_next_rebirth_cost", 10000);
+    Test.assert_var_float("base money multiplier", "g_observed_rebirth_money_multiplier", 1.0, 0.01);
+    Test.assert_var_bool("polisher locked before rebirth 1", "g_observed_polisher_unlocked", false);
+    Test.assert_var_bool("helicopter locked before rebirth 2", "g_observed_helicopter_unlocked", false);
+    Test.assert_var_bool("tree monster locked before rebirth 3", "g_observed_tree_monster_unlocked", false);
+    Test.assert_var_bool("forest haunting locked before rebirth 4", "g_observed_haunts_forest", false);
+}
+
+test_rebirth_button_opens_menu_without_gold :: proc() {
+    Test.teleport({0, 0});
+    Test.wait_seconds(0.5);
+    Test.click_button("rebirth_buy");
+    Test.wait_seconds(0.5);
+    Test.assert_var_bool("rebirth menu opens even when short on gold", "g_observed_show_rebirth_menu", true);
+}
+
+test_rebirth_zero_cannot_use_locked_interactables :: proc() {
+    Test.teleport({-6.67, -2.74});
+    Test.wait_seconds(0.5);
+    Test.assert_cannot_interact("polisher requires rebirth 1", "PolishingMachine");
+
+    Test.teleport({-40.95, -12.73});
+    Test.wait_seconds(0.5);
+    Test.assert_cannot_interact("helicopter requires rebirth 2", "Rentable_Helicopter_Southeast");
+
+    Test.teleport({0.05, 54.14});
+    Test.wait_seconds(0.5);
+    Test.assert_cannot_interact("tree monster requires rebirth 3", "Tree Monster");
+
+    Test.teleport({-49.80, -31.59});
+    Test.wait_seconds(0.5);
+    Test.assert_cannot_interact("bacteria takeover requires rebirth 4", "Bacteria Monster");
+}
