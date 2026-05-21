@@ -281,38 +281,45 @@ dot :: proc(a: v4, b: v4) -> float {
 
 PI :: 3.14159265359;
 
-lerp :: proc(a: $T, b: T, t: float) -> T {
-    return a + (b - a) * t;
-}
+lerp :: proc(a: v2, b: v2, t: float) -> v2 { return a + (b - a) * t; }
+lerp :: proc(a: v3, b: v3, t: float) -> v3 { return a + (b - a) * t; }
+lerp :: proc(a: v4, b: v4, t: float) -> v4 { return a + (b - a) * t; }
+lerp :: proc(a: float, b: float, t: float) -> float { return a + (b - a) * t; }
 
-clamp :: proc(a: $T, min: T, max: T) -> T {
-    if a < min {
-        return min;
-    }
-    if a > max {
-        return max;
-    }
+clamp :: proc(a: int, min: int, max: int) -> int {
+    if a < min return min;
+    if a > max return max;
     return a;
 }
 
-max :: proc(a: $T, b: T) -> T {
-    if a > b {
-        return a;
-    }
+clamp :: proc(a: float, min: float, max: float) -> float {
+    if a < min return min;
+    if a > max return max;
+    return a;
+}
+
+max :: proc(a: float, b: float) -> float {
+    if a > b return a;
     return b;
 }
 
-min :: proc(a: $T, b: T) -> T {
-    if a < b {
-        return a;
-    }
+min :: proc(a: float, b: float) -> float {
+    if a < b return a;
+    return b;
+}
+
+max :: proc(a: int, b: int) -> int {
+    if a > b return a;
+    return b;
+}
+
+min :: proc(a: int, b: int) -> int {
+    if a < b return a;
     return b;
 }
 
 abs :: proc(a: $T) -> T {
-    if a < 0 {
-        return -a;
-    }
+    if a < 0 return -a;
     return a;
 }
 

@@ -1,5 +1,630 @@
 import "core:basic"
 
+Entity :: class {
+    set_local_enabled          :: method(enabled: bool)                                                                                                                 #foreign "entity_set_local_enabled";
+    get_local_enabled          :: method() -> bool                                                                                                                      #foreign "entity_get_local_enabled";
+    get_world_enabled          :: method() -> bool                                                                                                                      #foreign "entity_get_world_enabled";
+    queue_for_destruction      :: method(after_seconds: float)                                                                                                          #foreign "entity_queue_for_destruction";
+    calculate_visual_position  :: method() -> v2                                                                                                                        #foreign "entity_calculate_visual_position";
+    calculate_predictive_error :: method() -> v2                                                                                                                        #foreign "entity_calculate_predictive_error";
+    calculate_interpolation_offset :: method() -> v2                                                                                                                    #foreign "entity_calculate_interpolation_offset";
+    mark_teleported            :: method()                                                                                                                              #foreign "entity_mark_teleported";
+    get_name                   :: method() -> string                                                                                                                    #foreign "entity_get_name";
+    set_name                   :: method(new_name: string)                                                                                                              #foreign "entity_set_name";
+    compare_name               :: method(name: string) -> bool                                                                                                           #foreign "entity_compare_name";
+    set_parent                 :: method(new_parent: Entity, keep_world_position: bool)                                                                                 #foreign "entity_set_parent";
+    set_local_position         :: method(p: v2)                                                                                                                         #foreign "entity_set_local_position";
+    lerp_local_position        :: method(target: v2, t: float)                                                                                                          #foreign "entity_lerp_local_position";
+    add_local_position         :: method(delta: v2)                                                                                                                     #foreign "entity_add_local_position";
+    set_local_scale            :: method(scale: v2)                                                                                                                     #foreign "entity_set_local_scale";
+    lerp_local_scale           :: method(target: v2, t: float)                                                                                                          #foreign "entity_lerp_local_scale";
+    set_local_rotation         :: method(degrees: float)                                                                                                                #foreign "entity_set_local_rotation";
+    lerp_local_rotation        :: method(target: float, t: float)                                                                                                       #foreign "entity_lerp_local_rotation";
+    add_local_rotation         :: method(delta: float)                                                                                                                  #foreign "entity_add_local_rotation";
+    destroy                    :: method()                                                                                                                              #foreign "entity_destroy";
+    add_component_raw          :: method(t: typeid, userdata: Object = {}, on_before_start: proc(component: Component, userdata: Object) = {}) -> Component             #foreign "entity_add_component";
+    get_component_raw          :: method(t: typeid) -> Component                                                                                                        #foreign "entity_get_component";
+    add_component :: proc(entity: Entity, $T: typeid, userdata: Object = {}, on_before_start: proc(component: Component, userdata: Object) = {}) -> T {
+        return add_component_raw(entity, T, userdata, on_before_start).(T);
+    }
+    get_component :: proc(entity: Entity, $T: typeid) -> T {
+        return get_component_raw(entity, T).(T);
+    }
+    get_first_component :: method() -> Component #foreign "entity_get_first_component";
+    get_last_component  :: method() -> Component #foreign "entity_get_last_component";
+    get_next_sibling    :: method() -> Entity    #foreign "entity_get_next_sibling";
+    get_prev_sibling    :: method() -> Entity    #foreign "entity_get_prev_sibling";
+    get_first_child     :: method() -> Entity    #foreign "entity_get_first_child";
+    get_last_child      :: method() -> Entity    #foreign "entity_get_last_child";
+    get_parent          :: method() -> Entity    #foreign "entity_get_parent";
+    id:                   u64                 #read_only #foreign "id";
+    local_position:       v2                  #read_only("use set_local_position()") #foreign "_local_position";
+    world_position:       v2                  #read_only #foreign "cached_world_position";
+    local_rotation:       float               #read_only("use set_local_rotation()") #foreign "_local_rotation";
+    world_rotation:       float               #read_only #foreign "cached_world_rotation";
+    local_scale:          v2                  #read_only("use set_local_scale()") #foreign "_local_scale";
+    world_scale:          v2                  #read_only #foreign "cached_world_scale";
+    model_matrix:         Matrix4             #read_only #foreign "cached_model_matrix";
+    inverse_model_matrix: Matrix4             #read_only #foreign "cached_inverted_model_matrix";
+    Effect_Data :: class {
+        active_effect: Effect_Base #read_only;
+        first_effect:  Effect_Base #read_only;
+        last_effect:   Effect_Base #read_only;
+    } #gc_root
+    effect_data: Effect_Data #read_only #foreign "effect_data_csl_handle";
+    get_active_effect :: method() -> Effect_Base {
+        if effect_data == null  return null;
+        return effect_data.active_effect;
+    }
+    get_first_effect :: method() -> Effect_Base {
+        if effect_data == null  return null;
+        return effect_data.first_effect;
+    }
+    get_last_effect :: method() -> Effect_Base {
+        if effect_data == null  return null;
+        return effect_data.last_effect;
+    }
+} #gc_root #foreign_struct "Entity"
+
+Entity_Iterator :: struct {
+    next :: method() -> bool #foreign "entity_iterator_next";
+    current: Entity #read_only #foreign "current_csl_handle";
+} #foreign_struct "New_Entity_Iterator"
+
+Component :: class {
+    awaken :: method() #foreign "component_awaken";
+    get_prev_component_on_entity :: method() -> Component #foreign "component_get_prev_component_on_entity";
+    get_next_component_on_entity :: method() -> Component #foreign "component_get_next_component_on_entity";
+    get_enabled :: method() -> bool #foreign "component_get_enabled";
+    set_enabled :: method(new_value: bool) #foreign "component_set_enabled";
+    #interface ao_start                   :: proc(using this: Component);
+    #interface ao_update                  :: proc(using this: Component, dt: float);
+    #interface ao_late_update             :: proc(using this: Component, dt: float);
+    #interface ao_end                     :: proc(using this: Component);
+    #interface ao_can_use_ability         :: proc(using this: Component, ability: Ability_Base) -> bool;
+    #interface ao_can_use_interactable    :: proc(using this: Component, interactable: Interactable) -> bool;
+    #interface ao_on_interactable_used    :: proc(using this: Component, interactable: Interactable);
+    #interface ao_on_holding_interactable :: proc(using this: Component, interactable: Interactable);
+    #interface ao_on_state_sync           :: proc(using this: Component);
+    component_id:             u64       #read_only #foreign "component_id";
+    entity:                   Entity    #read_only #foreign "entity_csl_handle";
+} #gc_root #foreign_struct "Component_Base"
+
+Component_Iterator :: struct(T: typeid) {
+    component_iterator_next_raw :: method() -> bool #foreign "component_iterator_next";
+    current: T #read_only #foreign "current_csl_handle";
+    next :: method() -> bool {
+        return (&this).(*Component_Iterator(Component)).*.component_iterator_next_raw();
+    }
+} #foreign_struct "Hierarchical_Component_Iterator<Component_Base>"
+
+Sprite_Renderer :: class : Component {
+    set_texture  :: method(texture: Texture_Asset) #foreign "sprite_renderer_set_texture";
+    get_texture  :: method() -> Texture_Asset #foreign "sprite_renderer_get_texture";
+    set_material :: method(material: Material, transfer_ownership: bool) #foreign "sprite_renderer_set_material";
+    get_world_size :: method() -> v2 #foreign "sprite_renderer_get_world_size";
+    #error_on_use "`Sprite_Renderer.tint` does not exist. Did you mean to use `Sprite_Renderer.color`?"
+    tint: v4           #foreign "tint";
+    color: v4           #foreign "tint";
+    depth_offset: float #foreign "depth_offset";
+    layer: s32          #foreign "layer";
+    scale: v2           #foreign "scale";
+    flip_x: bool           #foreign "flip_x";
+    flip_y: bool           #foreign "flip_y";
+    mask_in_shadow: bool   #foreign "mask_in_shadow";
+} #foreign_struct "Sprite_Renderer"
+
+Collider :: class : Component {
+    overlaps_point :: method(point: v2) -> bool #foreign "collider_overlaps_point";
+    overlaps :: method(other: Collider) -> bool #foreign "collider_overlaps";
+} #foreign_struct "Collider"
+
+Circle_Collider :: class : Collider {
+} #foreign_struct "Circle_Collider"
+
+Box_Collider :: class : Collider {
+} #foreign_struct "Box_Collider"
+
+Polygon_Collider :: class : Collider {
+} #foreign_struct "Polygon_Collider"
+
+Edge_Collider :: class : Collider {
+} #foreign_struct "Edge_Collider"
+
+Rigidbody :: class : Component {
+} #foreign_struct "Rigidbody"
+
+Navmesh :: class : Component {
+    try_find_closest_point_on_navmesh :: method(to_point: v2, result: ref v2, triangle_hint: ref s64) -> bool #foreign "navmesh_try_find_closest_point_on_navmesh";
+    try_raycast :: method(position: v2, direction: v2) -> v2, bool #foreign "navmesh_try_raycast";
+    rebuild_immediately :: method() -> bool #foreign "navmesh_rebuild_immediately";
+    mark_for_rebuild :: method() #foreign "navmesh_mark_for_rebuild";
+} #foreign_struct "Navmesh"
+
+Navmesh_Loop :: class : Component {
+} #foreign_struct "Navmesh_Loop"
+
+Tilemap_Component :: class : Component {
+} #foreign_struct "Tilemap_Component"
+
+Terrain_Component :: class : Component {
+} #foreign_struct "Terrain_Component"
+
+Interactable :: class : Component {
+    get_text      :: method() -> string   #foreign "interactable_get_text";
+    set_text      :: method(text: string) #foreign "interactable_set_text";
+    get_hold_text :: method() -> string   #foreign "interactable_get_hold_text";
+    set_hold_text :: method(text: string) #foreign "interactable_set_hold_text";
+    set_listener :: method(new_listener: Component) #unsafe {
+        listener = new_listener;
+        true_type := type_info_table[new_listener.#type.(int)];
+        assert(true_type.kind == .CLASS, "% wasn't a class", {new_listener.#type});
+        struct_type := true_type.(Type_Info_Class).reference_to.(Type_Info_Struct);
+        can_use_proc = try_get_constant_procedure(struct_type, "can_use", proc(t: Component, player: Player) -> bool);
+        on_interact_proc = try_get_constant_procedure(struct_type, "on_interact", proc(t: Component, player: Player));
+        on_holding_proc = try_get_constant_procedure(struct_type, "on_holding", proc(t: Component, player: Player));
+    }
+    offset:             v2        #foreign "offset";
+    prompt_offset:      v2        #foreign "prompt_offset";
+    radius:             float     #foreign "radius";
+    required_hold_time: float     #foreign "required_hold_time";
+    priority:           s64       #foreign "priority";
+    listener: Component #foreign "csl_listener"         #read_only("use set_listener()");
+    can_use_proc:     (proc(t: Component, player: Player) -> bool) #foreign "csl_can_use_proc"     #read_only("use set_listener()");
+    on_interact_proc: (proc(t: Component, player: Player))         #foreign "csl_on_interact_proc" #read_only("use set_listener()");
+    on_holding_proc:  (proc(t: Component, player: Player))         #foreign "csl_on_holding_proc"  #read_only("use set_listener()");
+    #interface on_interact :: proc(t: Interactable, player: Player);
+    #interface on_holding  :: proc(t: Interactable, player: Player);
+} #foreign_struct "Interactable"
+
+
+Spine_Animator :: class : Component {
+    depth_offset: float #foreign "depth_offset";
+    layer: s32 #foreign "layer";
+    mask_in_shadow: bool #foreign "mask_in_shadow";
+    instance: Spine_Instance #read_only #foreign "instance_csl_handle";
+    using _instance_fields: Spine_Instance_Fields #read_only #foreign "instance_csl_handle";
+    set_color_replace_color :: method(color: Color_Replace_Color) #foreign "spine_animator_set_color_replace_color";
+    set_material            :: method(material: Material, transfer_ownership: bool) #foreign "spine_animator_set_material";
+    set_state_machine       :: method(new_state_machine: State_Machine, transfer_ownership: bool) #foreign "spine_animator_set_state_machine";
+    get_bone_local_position :: method(bone_name: string) -> v2 #foreign "spine_animator_get_bone_position";
+    set_bone_local_position :: method(bone_name: string, position: v2) #foreign "spine_animator_set_bone_position";
+    set_skeleton            :: method(asset: Spine_Asset) -> u64 #foreign "spine_animator_set_skeleton";
+    get_skeleton            :: method(id: u64 = 0) -> Spine_Asset #foreign "spine_animator_get_skeleton";
+    set_animation           :: method(animation: string, loop: bool, track: s64, speed: float = 1) #foreign "spine_animator_set_animation";
+    set_skin                :: method(skin: string) #foreign "spine_animator_set_skin";
+    enable_skin             :: method(skin: string) #foreign "spine_animator_enable_skin";
+    disable_skin            :: method(skin: string) #foreign "spine_animator_disable_skin";
+    disable_all_skins       :: method() #foreign "spine_animator_disable_all_skins";
+    refresh_skins           :: method() #foreign "spine_animator_refresh_skins";
+    set_to_setup_pose       :: method() #foreign "spine_animator_set_to_setup_pose";
+    get_skins               :: method() -> []string #foreign "spine_animator_get_skins";
+    get_tint                :: method() -> v4 #foreign "spine_animator_get_tint";
+    set_tint                :: method(new_tint: v4) #foreign "spine_animator_set_tint";
+} #foreign_struct "Spine_Animator"
+
+LOS_Caster :: class : Component {
+    radii: v2 #foreign "radi";
+} #foreign_struct "LOS_Caster"
+
+Shadow_Caster :: class : Component {
+    softness: v2 #foreign "softness";
+} #foreign_struct "Shadow_Caster"
+
+Light :: class : Component {
+    color:     v4    #foreign "color";
+    radii:     v2    #foreign "radi";
+    intensity: float #foreign "intensity";
+} #foreign_struct "Light"
+
+Spine_Event_Data :: struct {
+    event:        string;
+    int_value:    s64;
+    float_value:  float;
+    string_value: string;
+}
+
+Attachment_Draw_Mode :: enum {
+    BEHIND;
+    IN_FRONT;
+}
+
+Attachment_Desc :: struct {
+    draw_mode:        Attachment_Draw_Mode #foreign "draw_mode";
+    offset:           v2                   #foreign "offset";
+    scale:            v2                   #foreign "scale";
+    rotation_degrees: float                #foreign "rotation_degrees";
+    color:            v4                   #foreign "tint";
+    default :: proc() -> Attachment_Desc {
+        #static initted: bool;
+        #static desc: Attachment_Desc;
+        if !initted {
+            initted = true;
+            desc.draw_mode = .IN_FRONT;
+            desc.scale = {1, 1};
+            desc.color = {1, 1, 1, 1};
+        }
+        return desc;
+    }
+} #foreign_struct "Attachment_Desc"
+
+Camera :: struct {
+    position:            v2            #foreign "position";
+    position_last_frame: v2 #read_only #foreign "position_last_frame";
+    size:                float         #foreign "orthographic_size";
+    follow_player:       bool          #foreign "follow_player";
+} #foreign_struct "Actual_Camera"
+
+Post_Processing :: struct {
+    Bloom_Config :: struct {
+        bloom_amount: float #foreign "bloom_amount";
+    } #foreign_struct "Bloom_Config"
+
+    Color_Grade_Config :: struct {
+        color_filter: v3    #foreign "color_filter";
+        saturation:   float #foreign "saturation";
+        contrast:     float #foreign "contrast";
+    } #foreign_struct "Color_Grade_Config"
+
+    Chromatic_Aberration_Config :: struct {
+        channel_offsets: v3 #foreign "offsets";
+        focal_point:     v2 #foreign "focal_point";
+    } #foreign_struct "Chromatic_Aberration_Config"
+
+    Blur_Config :: struct {
+        directions: float #foreign "directions";
+        quality:    float #foreign "quality";
+        size:       float #foreign "size";
+    } #foreign_struct "Blur_Config"
+
+    Film_Grain_Config :: struct {
+        strength:    float #foreign "strength";
+        noise_scale: float #foreign "noise_scale";
+    } #foreign_struct "Film_Grain_Config"
+
+    Vignette_Config :: struct {
+        radius:   float #foreign "radius";
+        softness: float #foreign "softness";
+    } #foreign_struct "Vignette_Config"
+
+    bloom               :: proc(config: Bloom_Config)                 #foreign "post_processing_bloom";
+    color_grade         :: proc(config: Color_Grade_Config)           #foreign "post_processing_color_grade";
+    chromatic_aberration :: proc(config: Chromatic_Aberration_Config)  #foreign "post_processing_chromatic_aberration";
+    blur                :: proc(config: Blur_Config)                  #foreign "post_processing_blur";
+    film_grain          :: proc(config: Film_Grain_Config)            #foreign "post_processing_film_grain";
+    vignette            :: proc(config: Vignette_Config)              #foreign "post_processing_vignette";
+}
+
+AO_Player :: class : Component {
+    animator:               Spine_Animator      #read_only #foreign "animator_csl_handle";
+    agent:                  Movement_Agent      #read_only #foreign "agent_csl_handle";
+    camera:                 Camera                         #foreign "camera";
+    device_kind:            Device_Kind         #read_only #foreign "device_kind";
+    do_name_color_override: bool                           #foreign "do_name_color_override";
+    name_color_override:    v4                             #foreign "name_color_override";
+    avatar_color:           Color_Replace_Color #read_only #foreign "color_index";
+    default_inventory:      Inventory           #read_only #foreign "player_inventory_csl_handle";
+    comms_channel_listen_mask: u64                         #foreign "comms_channel_listen_mask";
+    comms_channel_speak_mask:  u64                         #foreign "comms_channel_speak_mask";
+    username_rect:             Rect                        #foreign "final_name_rect";
+    full_nameplate_rect:       Rect                        #foreign "full_nameplate_rect";
+    input_this_frame:          v2                          #foreign "input_this_frame";
+    input_override:            v2                          #foreign "input_override";
+    player_for_prediction:     Player                      #foreign "player_for_prediction_csl_handle";
+} #foreign_struct "Player"
+
+Movement_Agent :: class : Component {
+    Set_Path_Target_Result :: struct {
+        success:        bool;
+        next_point:     v2;
+        move_direction: v2;
+    }
+    set_path_target        :: method(target: v2, speed: float) -> Set_Path_Target_Result #foreign "movement_agent_set_path_target";
+    set_navmesh_to_lock_to :: method(navmesh: Navmesh) #foreign "movement_agent_set_navmesh_to_lock_to";
+    movement_speed:   float #foreign "movement_speed";
+    friction:         float #foreign "friction";
+    velocity:         v2    #foreign "velocity";
+    input_this_frame: v2    #foreign "input_this_frame";
+} #foreign_struct "Movement_Agent"
+
+Asset :: class {
+} #gc_root #foreign_struct "Asset_Base"
+
+Texture_Asset :: class : Asset {
+    get_width :: method() -> s64 #foreign "texture_asset_get_width";
+    get_height :: method() -> s64 #foreign "texture_asset_get_height";
+    get_aspect :: method() -> float #foreign "texture_asset_get_aspect";
+    get_pivot :: method() -> v2 #foreign "texture_asset_get_pivot";
+    get_pixels_per_unit :: method() -> float #foreign "texture_asset_get_pixels_per_unit";
+    get_uvs :: method() -> v2, v2 #foreign "texture_asset_get_uvs";
+} #foreign_struct "Texture"
+
+SFX_Asset :: class : Asset {
+} #foreign_struct "SFX_Asset"
+
+Spine_Asset :: class : Asset {
+} #foreign_struct "Spine_Skeleton_Data"
+
+Cosmetic_Asset :: class : Asset {
+} #foreign_struct "Cosmetic_Asset"
+
+Prefab_Asset :: class : Asset {
+} #foreign_struct "Prefab"
+
+Font_Asset :: class : Asset {
+} #foreign_struct "Font"
+
+Shader_Asset :: class : Asset {
+} #foreign_struct "Shader"
+
+Material :: class {
+    create      :: proc(shader: Shader_Asset) -> Material #foreign "material_create";
+    destroy     :: method() #foreign "material_destroy";
+    set_float   :: method(name: string, value: float) #foreign "material_set_float";
+    set_float2  :: method(name: string, value: v2) #foreign "material_set_float2";
+    set_float3  :: method(name: string, value: v3) #foreign "material_set_float3";
+    set_float4  :: method(name: string, value: v4) #foreign "material_set_float4";
+    set_int     :: method(name: string, value: int) #foreign "material_set_int";
+    set_texture :: method(name: string, texture: Texture_Asset) #foreign "material_set_texture";
+} #gc_root #foreign_struct "Pooled_User_Material"
+
+State_Machine :: class {
+    create :: proc() -> State_Machine #foreign "state_machine_create";
+    destroy          :: method() #foreign "state_machine_destroy";
+    set_trigger      :: method(variable_name: string) #foreign "state_machine_set_trigger";
+    set_bool         :: method(variable_name: string, value: bool) #foreign "state_machine_set_bool";
+    set_int          :: method(variable_name: string, value: int) #foreign "state_machine_set_int";
+    set_float        :: method(variable_name: string, value: float) #foreign "state_machine_set_float";
+    update           :: method(dt: float) #foreign "state_machine_update";
+    try_get_layer    :: method(layer_name: string) -> State_Machine_Layer #foreign "state_machine_try_get_layer";
+    create_layer     :: method(layer_name: string, track: s64) -> State_Machine_Layer #foreign "state_machine_create_layer";
+    create_variable  :: method(variable_name: string, kind: State_Machine_Variable.Kind) -> State_Machine_Variable #foreign "state_machine_create_variable";
+    try_get_variable :: method(variable_name: string) -> State_Machine_Variable #foreign "state_machine_try_get_variable";
+    debug_enabled: bool            #foreign "debug_enabled";
+} #gc_root #foreign_struct "State_Machine"
+
+State_Machine_Layer :: class {
+    get_state_machine        :: method() -> State_Machine #foreign "state_machine_layer_get_state_machine";
+    get_initial_state        :: method() -> State_Machine_State #foreign "state_machine_layer_get_initial_state";
+    set_initial_state        :: method(state: State_Machine_State) #foreign "state_machine_layer_set_initial_state";
+    create_state             :: method(state_name: string, loop: bool, duration: float = 0) -> State_Machine_State #foreign "state_machine_layer_create_state";
+    get_current_state        :: method() -> State_Machine_State #foreign "state_machine_layer_get_current_state";
+    try_get_state            :: method(state_name: string) -> State_Machine_State #foreign "state_machine_layer_try_get_state";
+    create_transition        :: method(from_state: State_Machine_State, to_state: State_Machine_State, require_state_complete: bool) -> State_Machine_Transition #foreign "state_machine_layer_create_transition";
+    create_global_transition :: method(to_state: State_Machine_State, allow_transition_to_self: bool) -> State_Machine_Transition #foreign "state_machine_layer_create_global_transition";
+    get_current_state_length :: method() -> float #foreign "state_machine_layer_get_current_state_length";
+    reset_to_initial_state   :: method() #foreign "state_machine_layer_reset_to_initial_state";
+} #gc_root #foreign_struct "State_Machine_Layer"
+
+State_Machine_State :: class {
+    get_name :: method() -> string #foreign "state_machine_state_get_name";
+    speed: float                          #foreign "speed";
+} #gc_root #foreign_struct "State_Machine_State"
+
+State_Machine_Variable :: class {
+    Kind :: enum {
+        INVALID;
+        BOOL;
+        TRIGGER;
+        FLOAT;
+        INT;
+    }
+} #gc_root #foreign_struct "State_Machine_Variable"
+
+State_Machine_Transition :: class {
+    Numeric_Condition_Kind :: enum {
+        INVALID;
+        GREATER;
+        GREATER_EQUAL;
+        LESS;
+        LESS_EQUAL;
+        EQUAL;
+    }
+    create_trigger_condition :: method(variable: State_Machine_Variable) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_trigger_condition";
+    create_bool_condition    :: method(variable: State_Machine_Variable, value: bool) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_bool_condition";
+    create_float_condition   :: method(variable: State_Machine_Variable, value: float, kind: Numeric_Condition_Kind) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_float_condition";
+    create_int_condition     :: method(variable: State_Machine_Variable, value: int, kind: Numeric_Condition_Kind) -> State_Machine_Transition_Condition #foreign "state_machine_transition_create_int_condition";
+} #gc_root #foreign_struct "State_Machine_Transition"
+
+State_Machine_Transition_Condition :: class {
+} #gc_root #foreign_struct "State_Machine_Transition_Condition"
+
+SFX_Channel :: enum {
+    SFX;
+    MUSIC;
+}
+
+SFX_Desc :: struct {
+    local_only:       bool                       #foreign "local_only";
+    positional:       bool                       #foreign "positional";
+    position:         v2              #read_only("use set_position()") #foreign "position";
+    delay:            float                      #foreign "delay";
+    volume:           float                      #foreign "volume";
+    speed:            float                      #foreign "speed";
+    volume_perturb:   float                      #foreign "volume_perturb";
+    speed_perturb:    float                      #foreign "speed_perturb";
+    range_multiplier: float                      #foreign "range_multiplier";
+    loop_timeout:     float                      #foreign "loop_timeout";
+    entity_to_follow: u64                        #foreign "entity_to_follow";
+    loop:             bool                       #foreign "loop";
+    channel:          SFX_Channel                #foreign "channel";
+    set_position :: method(p: v2) {
+        positional = true;
+        #unsafe position = p;
+    }
+} #foreign_struct "SFX::Play_Sound_Desc"
+
+Text_Settings :: struct {
+    Vertical_Alignment :: enum {
+        TOP;
+        CENTER;
+        BOTTOM;
+    }
+    Horizontal_Alignment :: enum {
+        LEFT;
+        CENTER;
+        RIGHT;
+    }
+    font:                   Font_Asset           #foreign "font_id";
+    size:                   float                #foreign "size";
+    color:                  v4                   #foreign "color";
+    valign:                 Vertical_Alignment   #foreign "valign";
+    halign:                 Horizontal_Alignment #foreign "halign";
+    word_wrap:              bool                 #foreign "word_wrap";
+    overflow_wrap:          bool                 #foreign "overflow_wrap";
+    word_wrap_start_offset: float                #foreign "word_wrap_start_offset";
+    offset:                 v2                   #foreign "offset";
+    do_drop_shadow:         bool                 #foreign "do_drop_shadow";
+    drop_shadow_offset:     v2                   #foreign "drop_shadow_offset";
+    drop_shadow_color:      v4                   #foreign "drop_shadow_color";
+    do_outline:             bool                 #foreign "do_outline";
+    outline_thickness:      float                #foreign "outline_thickness";
+    outline_color:          v4                   #foreign "outline_color";
+    weight:                 float                #foreign "weight";
+    slant:                  float                #foreign "slant";
+    spacing_multiplier:     float                #foreign "spacing_multiplier";
+    line_height_multiplier: float                #foreign "line_height_multiplier";
+    do_autofit:             bool                 #foreign "do_autofit";
+    autofit_min_size:       float                #foreign "autofit_min_size";
+    autofit_max_size:       float                #foreign "autofit_max_size";
+    autofit_iters:          s32                  #foreign "autofit_iters";
+} #foreign_struct "UI::Text_Settings"
+
+Texture_Nine_Slice_Data :: struct {
+    slice:       v4    #foreign "slice";
+    slice_scale: float #foreign "slice_scale";
+} #foreign_struct "Texture_Nine_Slice_Data"
+
+Button_Settings :: struct {
+    color:                       v4                      #foreign "color";
+    hovered_color:               v4                      #foreign "hovered_color";
+    pressed_color:               v4                      #foreign "pressed_color";
+    disabled_color:              v4                      #foreign "disabled_color";
+    color_multiplier:            v4                      #foreign "color_multiplier";
+    background_color_multiplier: v4                      #foreign "background_color_multiplier";
+    press_scaling:               float                   #foreign "press_scaling";
+    sprite:                      Texture_Asset           #foreign "sprite";
+    sprite_hovered:              Texture_Asset           #foreign "sprite_hovered";
+    sprite_pressed:              Texture_Asset           #foreign "sprite_pressed";
+    sprite_padding:              v4                      #foreign "sprite_padding";
+    nine_slice_data:             Texture_Nine_Slice_Data #foreign "nine_slice_data";
+    hover_offset:                v2                      #foreign "hover_offset";
+    text_pressed_offset:         v2                      #foreign "text_pressed_offset";
+    text_unpressed_offset:       v2                      #foreign "text_unpressed_offset";
+    click_sound:                 SFX_Asset               #foreign "click_sound";
+    click_sound_desc:            SFX_Desc                #foreign "click_sound_desc";
+    stay_hot_while_active:       bool                    #foreign "stay_hot_while_active";
+    return_to_center_to_cancel:  bool                    #foreign "return_to_center_to_cancel";
+    sprite_fit_aspect:           bool                    #foreign "sprite_fit_aspect";
+    keybind:                     u64                     #foreign "keybind";
+} #foreign_struct "UI::Button_Settings"
+
+Interact_Mouse_Button :: struct {
+    time_last_clicked: float #foreign "time_last_clicked";
+    active:            bool  #foreign "active";
+    newly_active:      bool  #foreign "newly_active";
+    clicked:           bool  #foreign "clicked";
+    double_clicked:    bool  #foreign "double_clicked";
+    released:          bool  #foreign "released";
+} #foreign_struct "UI::Mouse_Button_Data"
+
+Interact_Result :: struct {
+    hovering:             bool              #foreign "hovering";
+    just_pressed:         bool              #foreign "just_pressed";
+    pressed:              bool              #foreign "pressed";
+    released:             bool              #foreign "released";
+    active:               bool              #foreign "active";
+    clicked:              bool              #foreign "clicked";
+    double_clicked:       bool              #foreign "double_clicked";
+    enter_pressed:        bool              #foreign "enter_pressed";
+    tab_pressed:          bool              #foreign "tab_pressed";
+    escape_pressed:       bool              #foreign "escape_pressed";
+    modified_text_input:  bool              #foreign "modified_text_input";
+    became_inactive:      bool              #foreign "became_inactive";
+    right:                Interact_Mouse_Button #foreign "right";
+    active_t:             float             #foreign "active_t";
+    active_t_eased:       float             #foreign "active_t_eased";
+    hover_t:              float             #foreign "hover_t";
+    hover_t_eased:        float             #foreign "hover_t_eased";
+    clicked_t:            float             #foreign "clicked_t";
+    clicked_t_eased:      float             #foreign "clicked_t_eased";
+    dropped_payload:      bool              #foreign "dropped_payload";
+    can_receive_payload:  bool              #foreign "can_receive_payload";
+    will_receive_payload: bool              #foreign "will_receive_payload";
+    drag_drop_payload:    Object            #foreign "drag_drop_payload";
+    button_color:         v4                #foreign "button_color";
+    hover_offset:         v2                #foreign "hover_offset";
+    text_rect_is_valid:   bool              #foreign "text_rect_is_valid";
+    rect:                 Rect              #foreign "rect";
+    text_rect_:           Rect              #foreign "text_rect_";
+    ui_scale:             float             #foreign "ui_scale";
+    mouse_position:       v2                #foreign "mouse_position";
+} #foreign_struct "UI::Interact_Result"
+
+Item_Definition_Desc :: struct {
+    id:              string          #foreign "id";
+    name:            string          #foreign "name";
+    icon:            Texture_Asset   #foreign "icon";
+    stack_size:      s64             #foreign "stack_size";
+    tier:            Item_Tier       #foreign "tier";
+} #foreign_struct "CSL_Item_Definition_Desc"
+
+Item_Definition_Base :: class {
+    id:   string          #read_only #foreign "csl_id";
+    name: string          #read_only #foreign "csl_name";
+    type: typeid          #read_only #foreign "csl_defn_class_typeid";
+    instance_type: typeid #read_only #foreign "csl_inst_class_typeid";
+    tier: Item_Tier       #read_only #foreign "tier";
+} #gc_root #foreign_struct "Item_Definition"
+
+Item_Instance_Base :: class {
+    inventory: Inventory  #read_only #foreign "inventory_csl_handle";
+    slot_index: s64       #read_only #foreign "inventory_slot";
+    quantity:   s64       #read_only #foreign "quantity";
+} #gc_root #foreign_struct "Item_Instance"
+
+Inventory_Base :: class {
+    capacity: s64   #read_only #foreign "capacity";
+} #gc_root #foreign_struct "Inventory"
+
+Inventory_Draw_Options :: struct {
+    title:                      string  #foreign "title";
+    show_exit_button:           bool    #foreign "show_exit_button";
+    show_scroll_bar:            bool    #foreign "show_scroll_bar";
+    show_background:            bool    #foreign "show_background";
+    allow_drag_drop:            bool    #foreign "allow_drag_drop";
+    drag_drop_color_multiplier: v4      #foreign "drag_drop_color_multiplier";
+    hotbar_item_count:          s32     #foreign "hotbar_item_count";
+    columns:                    s32     #foreign "columns";
+    rows:                       s32     #foreign "rows";
+    force_select_hotbar_index:  s32     #foreign "force_select_hotbar_index";
+    hide_bag_button:            bool    #foreign "hide_bag_button";
+    enable_selection:           bool    #foreign "enable_selection";
+    scroll_item_selection:      bool    #foreign "scroll_item_selection";
+    keyboard_item_selection:    bool    #foreign "keyboard_item_selection";
+    enable_use_from_hotbar:     bool    #foreign "enable_use_from_hotbar";
+    default :: proc() -> Inventory_Draw_Options {
+        desc: Inventory_Draw_Options;
+        desc.force_select_hotbar_index = -1;
+        desc.hotbar_item_count = 6;
+        desc.allow_drag_drop = true;
+        desc.drag_drop_color_multiplier = .{1, 1, 1, 1};
+        desc.enable_selection = true;
+        desc.scroll_item_selection = true;
+        desc.keyboard_item_selection = true;
+        return desc;
+    }
+} #foreign_struct "Inventory_Draw_Options"
+
+Draw_Hotbar_Result :: struct {
+    selected_item:       Item_Instance #foreign "selected_item";
+    selected_item_index: s64           #foreign "selected_item_index";
+    dropped_item:        Item_Instance #foreign "dropped_item";
+    entire_rect:         Rect          #foreign "entire_rect";
+    inventory_open:      bool          #foreign "inventory_open";
+    inventory_open_t:    float         #foreign "inventory_open_t";
+} #foreign_struct "Inventory_Manager::Draw_Hotbar_Result"
+
 Game :: struct {
     get_local_player :: proc() -> Player, bool #foreign "game_get_local_player";
 
@@ -136,7 +761,9 @@ try_get_constant_procedure :: proc(ti: Type_Info_Struct, name: string, $T: typei
     for i: 0..ti.members.count-1 {
         if ti.members[i].constant {
             if ti.members[i].name == name {
-                return (&ti.constant_storage[ti.members[i].offset]).(*T).*;
+                offset := ti.members[i].offset;
+                assert(offset >= 0, "offset was invalid: % %, %, %", {ti.*, T, name, offset});
+                return (&ti.constant_storage[offset]).(*T).*;
             }
         }
     }
@@ -320,7 +947,7 @@ component_iterator :: proc($T: typeid, include_disabled := false) -> Component_I
     return (&component_iterator_raw(T, include_disabled)).(*Component_Iterator(T)).*;
 }
 
-List :: struct($T: typeid) {
+List :: struct(T: typeid) {
     elements: []T;
     capacity: s64;
 }
@@ -959,7 +1586,9 @@ core_purchase_handler :: proc(player: Player, id: string) -> bool {
     #if #exists(ao_purchase_handler) {
         return ao_purchase_handler(player, id);
     }
-    return false;
+
+    product := Purchasing.get_product(id);
+    return product.id.count > 0 && !product.consumable;
 }
 
 Economy :: struct {
@@ -1116,6 +1745,9 @@ Items :: struct {
     can_move_item_to_inventory                  :: proc(instance: Item_Instance, inventory: Inventory, will_destroy_item: ref bool) -> bool               #foreign "items_can_move_item_to_inventory";
     move_item_to_inventory                      :: proc(instance: Item_Instance, inventory: Inventory)                                                    #foreign "items_move_item_to_inventory";
 
+    can_move_all_items                          :: proc(entries: []Item_Transaction_Entry)                                          -> bool               #foreign "items_can_move_all_items";
+    move_all_items                              :: proc(entries: []Item_Transaction_Entry)                                                                #foreign "items_move_all_items";
+
     move_as_many_items_as_possible_to_inventory :: proc(instance: Item_Instance, inventory: Inventory, destroyed_item: ref bool)    -> s64                #foreign "items_move_as_many_items_as_possible_to_inventory";
     remove_item_from_inventory                  :: proc(instance: Item_Instance, inventory: Inventory)                                                    #foreign "items_remove_item_from_inventory";
     can_swap_items                              :: proc(inventory_a: Inventory, inventory_b: Inventory, slot_a: s64, slot_b: s64)   -> bool               #foreign "items_can_swap_items";
@@ -1171,13 +1803,26 @@ get_tier_color :: proc(tier: Item_Tier) -> v4 {
     return {1, 1, 1, 1};
 }
 
+Item_Transaction_Entry :: struct {
+    instance:  Item_Instance;
+    inventory: Inventory;
+}
+
 Inventory :: class : Inventory_Base {
     get_item :: proc(inventory: Inventory, index: s64) -> Item_Instance #foreign "inventory_get_item";
 }
 
 Item_Definition :: class : Item_Definition_Base {
-    get_name       :: method() -> string #foreign "item_definition_get_name";
-    get_id         :: method() -> string #foreign "item_definition_get_id";
+    #deprecate_soft "Use the `name` field instead of this getter."
+    get_name :: method() -> string {
+        return name;
+    }
+
+    #deprecate_soft "Use the `id` field instead of this getter."
+    get_id :: method() -> string {
+        return id;
+    }
+
     get_icon       :: method() -> Texture_Asset #foreign "item_definition_get_icon";
 }
 
@@ -1316,7 +1961,18 @@ Color_Replace_Color :: enum {
     // NOTE(JOSH): SYNC :CrewchsiaEnum
 }
 
-Spine_Instance :: class : Spine_Instance_Base {
+Spine_Instance_Fields :: class {
+    state_machine:    State_Machine  #read_only("use set_state_machine()") #foreign "state_machine_csl_handle";
+    color_multiplier: v4                        #foreign "color_multiplier";
+    scale:            v2                        #foreign "skeleton_scale";
+    speed_multiplier: float                     #foreign "speed_multiplier";
+    color_replace_color: Color_Replace_Color #read_only("use set_color_replace_color()") #foreign "last_set_crewchsia_color";
+    on_event_userdata:           Object #read_only("use set_on_event()") #foreign "csl_on_event_userdata";
+    on_animation_start_userdata: Object #read_only("use set_on_animation_start()") #foreign "csl_on_animation_start_userdata";
+    on_animation_end_userdata:   Object #read_only("use set_on_animation_end()") #foreign "csl_on_animation_end_userdata";
+} #gc_root #foreign_struct "Spine_Instance"
+
+Spine_Instance :: class : Spine_Instance_Fields {
     set_state_machine :: method(new_state_machine: State_Machine, transfer_ownership: bool)  #foreign "spine_instance_set_state_machine";
 
     get_bone_local_position :: method(bone_name: string) -> v2         #foreign "spine_instance_get_bone_position";
@@ -1325,17 +1981,43 @@ Spine_Instance :: class : Spine_Instance_Base {
     create            :: proc() -> Spine_Instance                                            #foreign "spine_instance_create";
     destroy           :: method()                                                            #foreign "spine_instance_destroy";
     update            :: method(dt: float)                                                   #foreign "spine_instance_update";
-    set_skeleton      :: method(asset: Spine_Asset)                                          #foreign "spine_instance_set_skeleton";
-    get_skeleton      :: method() -> Spine_Asset                                             #foreign "spine_instance_get_skeleton";
+
+    set_skeleton      :: method(asset: Spine_Asset) -> u64                                   #foreign "spine_instance_set_skeleton";
+    get_skeleton      :: method(id: u64 = 0) -> Spine_Asset                                  #foreign "spine_instance_get_skeleton";
+
+    add_skeleton      :: method(asset: Spine_Asset) -> u64                                  #foreign "spine_instance_add_skeleton";
+    remove_skeleton   :: method(id: u64)                                                     #foreign "spine_instance_remove_skeleton";
+    set_main_skeleton :: method(id: u64)                                                     #foreign "spine_instance_set_main_skeleton";
+
     set_animation     :: method(animation: string, loop: bool, track: s64, speed: float = 1) #foreign "spine_instance_set_animation";
+
     set_skin          :: method(skin: string)                                                #foreign "spine_instance_set_skin";
     enable_skin       :: method(skin: string)                                                #foreign "spine_instance_enable_skin";
     disable_skin      :: method(skin: string)                                                #foreign "spine_instance_disable_skin";
     disable_all_skins :: method()                                                            #foreign "spine_instance_disable_all_skins";
     refresh_skins     :: method()                                                            #foreign "spine_instance_refresh_skins";
-    set_to_setup_pose :: method()                                                            #foreign "spine_instance_set_to_setup_pose";
     get_skins         :: method() -> []string                                                #foreign "spine_instance_get_skins";
-}
+
+    set_color_replace_color      :: method(color: Color_Replace_Color) #foreign "spine_instance_set_color_replace_color";
+    set_material                 :: method(material: Material, transfer_ownership: bool) #foreign "spine_instance_set_material";
+
+    set_on_event                 :: method(userdata: Object, callback: proc(userdata: Object, event: Spine_Event_Data)) #foreign "spine_instance_set_on_event";
+    set_on_animation_start       :: method(userdata: Object, callback: proc(userdata: Object, animation: string)) #foreign "spine_instance_set_on_animation_start";
+    set_on_animation_end         :: method(userdata: Object, callback: proc(userdata: Object, animation: string)) #foreign "spine_instance_set_on_animation_end";
+
+    set_to_setup_pose :: method()                                                            #foreign "spine_instance_set_to_setup_pose";
+
+    apply_cosmetic :: method(cosmetic: Cosmetic_Asset) #foreign "spine_instance_apply_cosmetic";
+
+    override_attachment_sprite       :: method(attachment_name: string, texture: Texture_Asset) -> u64                                         #foreign "spine_instance_override_attachment_sprite";
+    clear_attachment_sprite_override :: method(id: u64)                                                                                        #foreign "spine_instance_clear_attachment_sprite_override";
+
+    add_attachment_sprite            :: method(slot_name: string, texture: Texture_Asset, desc: Attachment_Desc) -> u64                        #foreign "spine_instance_add_attachment_sprite";
+    clear_attachment_sprite          :: method(id: u64)                                                                                        #foreign "spine_instance_clear_attachment_sprite";
+
+    add_attachment_rig               :: method(slot_name: string, rig: Spine_Instance, desc: Attachment_Desc, transfer_ownership: bool) -> u64 #foreign "spine_instance_add_attachment_rig";
+    clear_attachment_rig             :: method(id: u64)                                                                                        #foreign "spine_instance_clear_attachment_rig";
+} #gc_root #foreign_struct "Spine_Instance"
 
 //
 // Player
@@ -1363,11 +2045,17 @@ Player_Base :: class : AO_Player {
     add_name_invisibility_reason    :: method(reason: string) #foreign "player_add_name_invisibility_reason";
     remove_name_invisibility_reason :: method(reason: string) #foreign "player_remove_name_invisibility_reason";
 
+    add_name_offset_reason    :: method(reason: string, offset: float) #foreign "player_add_name_offset_reason";
+    remove_name_offset_reason :: method(reason: string) #foreign "player_remove_name_offset_reason";
+
     add_ghost_reason    :: method(reason: string) #foreign "player_add_ghost_reason";
     remove_ghost_reason :: method(reason: string) #foreign "player_remove_ghost_reason";
 
     add_disable_movement_input_reason    :: method(reason: string) #foreign "player_add_disable_movement_input_reason";
     remove_disable_movement_input_reason :: method(reason: string) #foreign "player_remove_disable_movement_input_reason";
+
+    add_joystick_disable_reason    :: method(reason: string) #foreign "player_add_joystick_disable_reason";
+    remove_joystick_disable_reason :: method(reason: string) #foreign "player_remove_joystick_disable_reason";
 
     is_local_or_server :: method() -> bool #foreign "player_is_local_or_server";
     is_local           :: method() -> bool #foreign "player_is_local";
@@ -2322,6 +3010,28 @@ UIK :: struct {
     Text_Override_SIZE_MULT :: 4;
     Text_Override_COLOR     :: 8;
     Text_Override_WORD_WRAP :: 16;
+    Text_Override_OUTLINE   :: 32;
+
+    Scroll_None           :: 0;
+    Scroll_Horizontal     :: 4096;
+    Scroll_Vertical       :: 8192;
+    Scroll_Unbounded      :: 16384;
+    Scroll_Zoom           :: 32768;
+    Scroll_Clamp          :: 131072;
+    Scroll_Auto_Scrollbar :: 262144;
+    Scrollbar_Left        :: 524288;
+    Scrollbar_Top         :: 1048576;
+    Scroll_Default        :: Scroll_Vertical | Scroll_Clamp;
+    SCROLL_NONE           :: Scroll_None;
+    SCROLL_HORIZONTAL     :: Scroll_Horizontal;
+    SCROLL_VERTICAL       :: Scroll_Vertical;
+    SCROLL_UNBOUNDED      :: Scroll_Unbounded;
+    SCROLL_ZOOM           :: Scroll_Zoom;
+    SCROLL_CLAMP          :: Scroll_Clamp;
+    SCROLL_AUTO_SCROLLBAR :: Scroll_Auto_Scrollbar;
+    SCROLLBAR_LEFT        :: Scrollbar_Left;
+    SCROLLBAR_TOP         :: Scrollbar_Top;
+    SCROLL_DEFAULT        :: Scroll_Default;
 
     Panel_Background_Kind :: enum {
         BACKGROUND_NONE;
@@ -2348,8 +3058,8 @@ UIK :: struct {
         MODAL_WITH_FOOTER_WHITE;
         MODAL_WITH_FOOTER_YELLOW;
         MODAL_TRANSP_BLACK;
-        BUTTON_BASIC_YELLOW2;
-        BUTTON_BASIC_YELLOW1;
+        BUTTON_BASIC_ORANGE;
+        BUTTON_BASIC_YELLOW;
         BUTTON_BASIC_WHITE;
         BUTTON_BASIC_RED;
         BUTTON_BASIC_PURPLE;
@@ -2358,8 +3068,8 @@ UIK :: struct {
         BUTTON_BASIC_BROWN;
         BUTTON_BASIC_BLUE;
         BUTTON_BASIC_BLACK;
-        BUTTON_BASIC_SKEW_YELLOW2;
-        BUTTON_BASIC_SKEW_YELLOW1;
+        BUTTON_BASIC_SKEW_ORANGE;
+        BUTTON_BASIC_SKEW_YELLOW;
         BUTTON_BASIC_SKEW_WHITE;
         BUTTON_BASIC_SKEW_RED;
         BUTTON_BASIC_SKEW_PURPLE;
@@ -2368,8 +3078,8 @@ UIK :: struct {
         BUTTON_BASIC_SKEW_BROWN;
         BUTTON_BASIC_SKEW_BLUE;
         BUTTON_BASIC_SKEW_BLACK;
-        BUTTON_BASIC_ARROW_YELLOW2;
-        BUTTON_BASIC_ARROW_YELLOW1;
+        BUTTON_BASIC_ARROW_ORANGE;
+        BUTTON_BASIC_ARROW_YELLOW;
         BUTTON_BASIC_ARROW_WHITE;
         BUTTON_BASIC_ARROW_RED;
         BUTTON_BASIC_ARROW_PURPLE;
@@ -2378,8 +3088,8 @@ UIK :: struct {
         BUTTON_BASIC_ARROW_BROWN;
         BUTTON_BASIC_ARROW_BLUE;
         BUTTON_BASIC_ARROW_BLACK;
-        BUTTON_SHINY_YELLOW2;
-        BUTTON_SHINY_YELLOW1;
+        BUTTON_SHINY_ORANGE;
+        BUTTON_SHINY_YELLOW;
         BUTTON_SHINY_WHITE;
         BUTTON_SHINY_RED;
         BUTTON_SHINY_PURPLE;
@@ -2388,8 +3098,8 @@ UIK :: struct {
         BUTTON_SHINY_BROWN;
         BUTTON_SHINY_BLUE;
         BUTTON_SHINY_BLACK;
-        BUTTON_SHINY_ARROW_YELLOW2;
-        BUTTON_SHINY_ARROW_YELLOW1;
+        BUTTON_SHINY_ARROW_ORANGE;
+        BUTTON_SHINY_ARROW_YELLOW;
         BUTTON_SHINY_ARROW_WHITE;
         BUTTON_SHINY_ARROW_RED;
         BUTTON_SHINY_ARROW_PURPLE;
@@ -2398,8 +3108,8 @@ UIK :: struct {
         BUTTON_SHINY_ARROW_BROWN;
         BUTTON_SHINY_ARROW_BLUE;
         BUTTON_SHINY_ARROW_BLACK;
-        BUTTON_SHINY_SKEW_YELLOW2;
-        BUTTON_SHINY_SKEW_YELLOW1;
+        BUTTON_SHINY_SKEW_ORANGE;
+        BUTTON_SHINY_SKEW_YELLOW;
         BUTTON_SHINY_SKEW_WHITE;
         BUTTON_SHINY_SKEW_RED;
         BUTTON_SHINY_SKEW_PURPLE;
@@ -2609,6 +3319,8 @@ UIK :: struct {
         cross_align:      Cross_Align;
         main_align:       Main_Align;
         background:       Panel_Background_Kind;
+        background_sprite_override: Texture_Asset;
+        background_material_override: Material;
         gap:              float;
         padding:          v4;
         tint:             v4;
@@ -2634,6 +3346,41 @@ UIK :: struct {
         size_multiplier:   float;
         word_wrap:         bool;
         color:             v4;
+        do_outline:        bool;
+        outline_thickness: float;
+        outline_color:     v4;
+
+        set_halign :: method(align: Text_Settings.Horizontal_Alignment) {
+            override_flags = override_flags | Text_Override_HALIGN;
+            halign = align;
+        }
+
+        set_valign :: method(align: Text_Settings.Vertical_Alignment) {
+            override_flags = override_flags | Text_Override_VALIGN;
+            valign = align;
+        }
+
+        set_size_mult :: method(mult: float) {
+            override_flags = override_flags | Text_Override_SIZE_MULT;
+            size_multiplier = mult;
+        }
+
+        set_color :: method(color_: v4) {
+            override_flags = override_flags | Text_Override_COLOR;
+            color = color_;
+        }
+
+        set_word_wrap :: method(wrap: bool) {
+            override_flags = override_flags | Text_Override_WORD_WRAP;
+            word_wrap = wrap;
+        }
+
+        set_outline :: method(enabled: bool, thickness: float = 4.0, color_: v4 = {0, 0, 0, 1}) {
+            override_flags = override_flags | Text_Override_OUTLINE;
+            do_outline = enabled;
+            outline_thickness = thickness;
+            outline_color = color_;
+        }
     }
 
     Widget_Desc :: struct {
@@ -2641,11 +3388,6 @@ UIK :: struct {
         label_text:    Text_Desc;
         disabled:      bool;
         toggle_visual: Toggle_Visual_Kind;
-    }
-
-    Interact_Handle :: struct {
-        slot:       s64;
-        generation: u64;
     }
 
     pixels :: proc(px: float) -> Size {
@@ -2714,29 +3456,29 @@ UIK :: struct {
         return .BACKGROUND_NONE;
     }
 
+    #deprecate_soft "Use Text_Desc.set_halign()."
     text_set_halign :: proc(d: *Text_Desc, align: Text_Settings.Horizontal_Alignment) {
-        d.override_flags = d.override_flags | Text_Override_HALIGN;
-        d.halign = align;
+        d.*.set_halign(align);
     }
 
+    #deprecate_soft "Use Text_Desc.set_valign()."
     text_set_valign :: proc(d: *Text_Desc, align: Text_Settings.Vertical_Alignment) {
-        d.override_flags = d.override_flags | Text_Override_VALIGN;
-        d.valign = align;
+        d.*.set_valign(align);
     }
 
+    #deprecate_soft "Use Text_Desc.set_size_mult()."
     text_set_size_mult :: proc(d: *Text_Desc, mult: float) {
-        d.override_flags = d.override_flags | Text_Override_SIZE_MULT;
-        d.size_multiplier = mult;
+        d.*.set_size_mult(mult);
     }
 
+    #deprecate_soft "Use Text_Desc.set_color()."
     text_set_color :: proc(d: *Text_Desc, color: v4) {
-        d.override_flags = d.override_flags | Text_Override_COLOR;
-        d.color = color;
+        d.*.set_color(color);
     }
 
+    #deprecate_soft "Use Text_Desc.set_word_wrap()."
     text_set_word_wrap :: proc(d: *Text_Desc, wrap: bool) {
-        d.override_flags = d.override_flags | Text_Override_WORD_WRAP;
-        d.word_wrap = wrap;
+        d.*.set_word_wrap(wrap);
     }
 
     /// Vertical flex-fill column layout, no background.
@@ -2748,6 +3490,8 @@ UIK :: struct {
         desc.cross_align = .STRETCH;
         desc.main_align = .START;
         desc.background = .BACKGROUND_NONE;
+        desc.background_sprite_override = null;
+        desc.background_material_override = null;
         desc.gap = 0;
         desc.padding = .{0, 0, 0, 0};
         desc.tint = .{1, 1, 1, 0};
@@ -2775,6 +3519,8 @@ UIK :: struct {
         desc.cross_align = .STRETCH;
         desc.main_align = .START;
         desc.background = .BACKGROUND_NONE;
+        desc.background_sprite_override = null;
+        desc.background_material_override = null;
         desc.gap = 0;
         desc.padding = .{0, 0, 0, 0};
         desc.tint = .{1, 1, 1, 0};
@@ -2907,6 +3653,8 @@ UIK :: struct {
         desc.cross_align = .STRETCH;
         desc.main_align = .START;
         desc.background = .BACKGROUND_NONE;
+        desc.background_sprite_override = null;
+        desc.background_material_override = null;
         desc.gap = 0;
         desc.padding = .{0, 0, 0, 0};
         desc.tint = .{1, 1, 1, 0};
@@ -2949,7 +3697,7 @@ UIK :: struct {
         return d;
     }
 
-    widget_desc_button_default :: proc(bg: Panel_Background_Kind = .BUTTON_BASIC_YELLOW1) -> Widget_Desc {
+    widget_desc_button_default :: proc(bg: Panel_Background_Kind = .BUTTON_BASIC_YELLOW) -> Widget_Desc {
         w: Widget_Desc;
         w.panel.axis = .VERTICAL;
         w.panel.width = fit();
@@ -2957,6 +3705,8 @@ UIK :: struct {
         w.panel.cross_align = .CENTER;
         w.panel.main_align = .CENTER;
         w.panel.background = bg;
+        w.panel.background_sprite_override = null;
+        w.panel.background_material_override = null;
         w.panel.gap = 4;
         w.panel.padding = v4{10, 20, 10, 20};
         w.panel.tint = v4{1, 1, 1, 1};
@@ -2978,7 +3728,7 @@ UIK :: struct {
         return w;
     }
 
-    widget_desc_button_auto_default :: proc(bg: Panel_Background_Kind = .BUTTON_BASIC_YELLOW1) -> Widget_Desc {
+    widget_desc_button_auto_default :: proc(bg: Panel_Background_Kind = .BUTTON_BASIC_YELLOW) -> Widget_Desc {
         w := widget_desc_button_default(bg);
         w.label_text.role = .BUTTON_AUTO;
         return w;
@@ -3027,22 +3777,27 @@ UIK :: struct {
     end :: proc() #foreign "uik_end";
     
     panel_begin :: proc(desc: Panel_Desc) #foreign "uik_panel_begin";
-    panel_begin_interactive :: proc(id: string, desc: Panel_Desc, disabled: bool = false) -> Interact_Handle #foreign "uik_panel_begin_interactive";
+    panel_begin_interactive :: proc(id: string, desc: Panel_Desc, disabled: bool = false) -> Interact_Result #foreign "uik_panel_begin_interactive";
     resolve_parent_tint :: proc() -> v4 #foreign "uik_resolve_parent_tint";
     panel_end :: proc() #foreign "uik_panel_end";
+
+    #deprecate_soft "Use the text procedure with this signature: proc(desc: Text_Desc, fmt: string, args: [^]any = {})"
     text :: proc(text: string, desc: Text_Desc) #foreign "uik_text";
-    toggle :: proc(id: string, label: string, value: *bool, desc: Widget_Desc) -> Interact_Handle #foreign "uik_toggle";
+
+    text :: proc(desc: Text_Desc, fmt: string, args: [^]any = {}) #foreign "uik_text_args";
+
+    toggle :: proc(id: string, label: string, value: *bool, desc: Widget_Desc) -> Interact_Result #foreign "uik_toggle";
     image :: proc(texture: Texture_Asset, tint: v4 = {1, 1, 1, 1}) #foreign "uik_image";
     image_nine :: proc(texture: Texture_Asset, nine_slice: Texture_Nine_Slice_Data, tint: v4 = {1, 1, 1, 1}) #foreign "uik_image_nine";
     spacer :: proc(width: Size, height: Size) #foreign "uik_spacer";
     progress_bar :: proc(track_desc: Panel_Desc) #foreign "uik_progress_bar";
-    scroll_area_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_flags: s64 = 139264) #foreign "uik_scroll_area_begin";
+    scroll_area_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_flags: s64 = Scroll_Default) #foreign "uik_scroll_area_begin";
     scroll_area_end :: proc() #foreign "uik_scroll_area_end";
     grid_begin :: proc(columns: s64, cell_height: float) #foreign "uik_grid_begin";
     grid_end :: proc() #foreign "uik_grid_end";
 
     card_begin :: proc(id: string, desc: Card_Desc, before_draw: u64 = 0, after_draw: u64 = 0, userdata: u64 = 0) #foreign "uik_card_begin";
-    card_end :: proc() -> Interact_Handle #foreign "uik_card_end";
+    card_end :: proc() -> Interact_Result #foreign "uik_card_end";
     card_zone :: proc(zone: Card_Zone) #foreign "uik_card_zone";
     card_zone_end :: proc() #foreign "uik_card_zone_end";
     card_push_unmask :: proc() #foreign "uik_card_push_unmask";
@@ -3082,8 +3837,8 @@ UIK :: struct {
     overlay_end :: proc() #foreign "uik_overlay_end";
     tab_bar_begin :: proc(id: string, active_index: *s64, active_style: Panel_Background_Kind = .BUTTON_TAB_MED_YELLOW, inactive_style: Panel_Background_Kind = .BUTTON_TAB_MED_GREY) #foreign "uik_tab_bar_begin";
     tab_bar_begin_desc :: proc(id: string, active_index: *s64, desc: Panel_Desc, active_style: Panel_Background_Kind = .BUTTON_TAB_MED_YELLOW, inactive_style: Panel_Background_Kind = .BUTTON_TAB_MED_GREY) #foreign "uik_tab_bar_begin_desc";
-    tab :: proc(label: string, index: s64) -> Interact_Handle #foreign "uik_tab";
-    tab :: proc(label: string, index: s64, desc: Widget_Desc) -> Interact_Handle #foreign "uik_tab_desc";
+    tab :: proc(label: string, index: s64) -> Interact_Result #foreign "uik_tab";
+    tab :: proc(label: string, index: s64, desc: Widget_Desc) -> Interact_Result #foreign "uik_tab_desc";
     tab_bar_end :: proc() #foreign "uik_tab_bar_end";
     currency :: proc(icon: Texture_Asset, amount: s64, desc: Text_Desc) #foreign "uik_currency";
 
@@ -3113,44 +3868,42 @@ UIK :: struct {
         return desc;
     }
 
-    resolve :: proc(handle: Interact_Handle) -> Interact_Result #foreign "uik_resolve";
-
     // ── Interaction query helpers (reimplemented in CSL) ──
 
-    clicked :: proc(handle: Interact_Handle) -> bool { return resolve(handle).clicked; }
-    hovering :: proc(handle: Interact_Handle) -> bool { return resolve(handle).hovering; }
-    pressed :: proc(handle: Interact_Handle) -> bool { return resolve(handle).pressed; }
-    released :: proc(handle: Interact_Handle) -> bool { return resolve(handle).released; }
-    just_pressed :: proc(handle: Interact_Handle) -> bool { return resolve(handle).just_pressed; }
-    active :: proc(handle: Interact_Handle) -> bool { return resolve(handle).active; }
-    double_clicked :: proc(handle: Interact_Handle) -> bool { return resolve(handle).double_clicked; }
+    clicked :: proc(result: Interact_Result) -> bool { return result.clicked; }
+    hovering :: proc(result: Interact_Result) -> bool { return result.hovering; }
+    pressed :: proc(result: Interact_Result) -> bool { return result.pressed; }
+    released :: proc(result: Interact_Result) -> bool { return result.released; }
+    just_pressed :: proc(result: Interact_Result) -> bool { return result.just_pressed; }
+    active :: proc(result: Interact_Result) -> bool { return result.active; }
+    double_clicked :: proc(result: Interact_Result) -> bool { return result.double_clicked; }
 
     // ── Composite widgets (reimplemented in CSL) ──
 
-    button :: proc(id: string, label: string, desc: Widget_Desc) -> Interact_Handle {
-        handle := panel_begin_interactive(id, desc.panel, desc.disabled);
+    button :: proc(id: string, label: string, desc: Widget_Desc) -> Interact_Result {
+        result := panel_begin_interactive(id, desc.panel, desc.disabled);
         text(label, desc.label_text);
         panel_end();
-        return handle;
+        return result;
     }
 
-    icon_button :: proc(id: string, icon: Texture_Asset, desc: Widget_Desc) -> Interact_Handle {
-        handle := panel_begin_interactive(id, desc.panel, desc.disabled);
+    icon_button :: proc(id: string, icon: Texture_Asset, desc: Widget_Desc) -> Interact_Result {
+        result := panel_begin_interactive(id, desc.panel, desc.disabled);
         if icon != null { image_fitted(icon, image_desc(.CONTAIN)); }
         panel_end();
-        return handle;
+        return result;
     }
 
-    icon_button_label :: proc(id: string, icon: Texture_Asset, label: string, desc: Widget_Desc) -> Interact_Handle {
+    icon_button_label :: proc(id: string, icon: Texture_Asset, label: string, desc: Widget_Desc) -> Interact_Result {
         d := desc;
         d.panel.axis = .HORIZONTAL;
         d.panel.cross_align = .CENTER;
         if d.panel.gap <= 0 { d.panel.gap = 8; }
-        handle := panel_begin_interactive(id, d.panel, d.disabled);
+        result := panel_begin_interactive(id, d.panel, d.disabled);
         if icon != null { image_fitted(icon, image_desc(.CONTAIN)); }
         text(label, d.label_text);
         panel_end();
-        return handle;
+        return result;
     }
 
     title :: proc(label: string, icon: Texture_Asset, desc: Title_Desc) {
@@ -3171,8 +3924,8 @@ UIK :: struct {
         panel_end();
     }
 
-    title_area :: proc(desc: Title_Area_Desc) -> Interact_Handle {
-        exit_handle: Interact_Handle;
+    title_area :: proc(desc: Title_Area_Desc) -> Interact_Result {
+        exit_result: Interact_Result;
         has_bg := desc.style != .NONE;
 
         // Resolve tint before opening any panels so we read the parent modal's style
@@ -3180,15 +3933,21 @@ UIK :: struct {
 
         spacer(flex(1), pixels(30));
 
-        // Outer container: full width, fit height, horizontal padding insets the banner
-        outer := layout_column();
+        // Outer container: full width, fit height. When the close button is visible,
+        // it gets its own reserved slot so it never overlaps the title banner.
+        outer := layout_row();
         outer.width = flex(1);
         outer.height = fit();
         outer.cross_align = .CENTER;
-        outer.padding = v4{0, 120, 0, 120};
+        outer.main_align = .CENTER;
+        outer.gap = 8;
+        outer.padding = v4{0, 64, 0, 64};
+        if desc.show_exit {
+            outer.padding = v4{0, 8, 0, 8};
+        }
         panel_begin(outer);
 
-        // Background panel: fills outer's content area, centered text
+        // Background panel: fills the middle header area, centered text.
         bg := layout_row();
         bg.width = flex(1);
         bg.height = fit();
@@ -3223,17 +3982,9 @@ UIK :: struct {
 
         panel_end(); // bg
 
-        // Exit button overlay: top right of outer
+        // Exit button: separate sibling of the banner, inside the modal bounds.
         if desc.show_exit {
             exit_tex := get_asset(Texture_Asset, "$AO/ui/kit/Icons/misc_icons_2/exit_button_large.png");
-            exit_overlay: Panel_Desc = {};
-            exit_overlay.opacity = 1;
-            exit_overlay.axis = .VERTICAL;
-            exit_overlay.width = fit();
-            exit_overlay.height = fit();
-            exit_overlay.cross_align = .CENTER;
-            exit_overlay.main_align = .CENTER;
-            overlay_begin(.TOP_RIGHT, exit_overlay, v2{-8, 0});
 
             btn: Panel_Desc = {};
             btn.opacity = 1;
@@ -3243,23 +3994,21 @@ UIK :: struct {
             btn.cross_align = .CENTER;
             btn.main_align = .CENTER;
             btn.show_background = false;
-            exit_handle = panel_begin_interactive("title_area_exit", btn);
+            exit_result = panel_begin_interactive("title_area_exit", btn);
             image_fitted(exit_tex, image_desc(.CONTAIN));
             panel_end();
-
-            overlay_end();
         }
 
         panel_end(); // outer
 
         spacer(flex(1), pixels(30));
 
-        return exit_handle;
+        return exit_result;
     }
 
-    list_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_enabled: bool = true) {
+    list_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_enabled: bool = true, scroll_flags: s64 = Scroll_Default) {
         if scroll_enabled {
-            scroll_area_begin(id, viewport_desc);
+            scroll_area_begin(id, viewport_desc, scroll_flags);
         } else {
             d := viewport_desc;
             d.clip_children = true;
@@ -3291,19 +4040,19 @@ UIK :: struct {
     }
 
     rect_sidebar_left :: proc() -> Rect {
-        return UI.get_safe_screen_rect().left_rect().grow_right(300).inset(300, 0, 250, 0).offset(15, 0);
+        return UI.get_safe_screen_rect().left_center_rect().grow_right(300).grow(250, 0, 300, 0).offset(15, 0);
     }
 
     rect_sidebar_right :: proc() -> Rect {
-        return UI.get_safe_screen_rect().right_rect().grow_left(300).inset(300, 0, 250, 0).offset(-15, 0);
+        return UI.get_safe_screen_rect().right_center_rect().grow_left(300).grow(250, 0, 300, 0).offset(-15, 0);
     }
 
     rect_topbar :: proc() -> Rect {
-        return UI.get_safe_screen_rect().top_rect().grow_bottom(150).inset(0, 400, 0, 400).offset(0, -15);
+        return UI.get_safe_screen_rect().top_center_rect().grow_bottom(150).grow(0, 550, 0, 550).offset(0, -15);
     }
 
     rect_hotbar :: proc() -> Rect {
-        return UI.get_safe_screen_rect().bottom_rect().grow_top(150).inset(0, 500, 0, 500).offset(0, 15);
+        return UI.get_safe_screen_rect().bottom_center_rect().grow_top(150).grow(0, 450, 0, 450).offset(0, 15);
     }
 
     rect_stats :: proc() -> Rect {
@@ -3311,6 +4060,6 @@ UIK :: struct {
     }
 
     rect_dialog :: proc() -> Rect {
-        return UI.get_safe_screen_rect().top_rect().grow_bottom(275).inset(0, 800, 0, 800).offset(0, 0);
+        return UI.get_safe_screen_rect().top_center_rect().grow_bottom(275).grow(0, 250, 0, 250).offset(0, -15);
     }
 }

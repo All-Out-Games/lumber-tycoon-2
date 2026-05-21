@@ -1,4 +1,4 @@
-Hashtable :: struct($Key: typeid, $Value: typeid) {
+Hashtable :: struct(Key: typeid, Value: typeid) {
     Hashtable_Entry :: struct {
         hash:  u64;
         key:   Key;

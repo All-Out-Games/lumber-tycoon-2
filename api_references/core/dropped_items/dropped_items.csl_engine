@@ -195,7 +195,7 @@ Dropped_Item :: class : Component {
 
         // Add interactable
         interactable := dropped_entity.add_component(Interactable);
-        interactable.set_text(format_string("Pick up %", {defn.get_name()}));
+        interactable.set_text(format_string("Pick up %", {defn.name}));
         interactable.radius = 1;
         interactable.required_hold_time = 0.2;
 

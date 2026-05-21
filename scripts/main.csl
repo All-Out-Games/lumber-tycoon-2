@@ -4313,7 +4313,7 @@ draw_lumber_topbar :: proc(player: Player) {
     backpack_full := count_item(player, log_defn) >= effective_backpack_capacity(player);
     near_home := length(player.entity.local_position) <= 10.0;
 
-    home_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_YELLOW1);
+    home_bd := UIK.widget_desc_button_default(.BUTTON_BASIC_YELLOW);
     if backpack_full && !near_home {
         home_bd = UIK.widget_desc_button_auto_default(.BUTTON_BASIC_WHITE);
         home_pulse := sin(get_time() * 4.8) * 0.5 + 0.5;
@@ -4906,7 +4906,7 @@ draw_axe_upgrade_shop :: proc(player: Player) {
     UIK.panel_end();
     UIK.panel_end();
 
-    buy_handle: UIK.Interact_Handle;
+    buy_handle: Interact_Result;
     can_buy := false;
     if player.axe_tier < MAX_AXE_TIER {
         cost := axe_upgrade_cost(player.axe_tier);
@@ -4933,7 +4933,7 @@ draw_axe_upgrade_shop :: proc(player: Player) {
     if UIK.clicked(exit_handle) {
         player.show_upgrade_shop = false;
     }
-    if player.axe_tier < MAX_AXE_TIER && buy_handle.generation > 0 && UIK.clicked(buy_handle) {
+    if player.axe_tier < MAX_AXE_TIER && UIK.clicked(buy_handle) {
         cost := axe_upgrade_cost(player.axe_tier);
         if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
             Economy.withdraw_currency(player, GOLD_CURRENCY, cost);
@@ -4959,12 +4959,12 @@ draw_upgrades_menu :: proc(player: Player) {
     UIK.panel_begin(shell);
     exit_handle := UIK.title_area(UIK.title_area_desc("Upgrades"));
 
-    backpack_handle: UIK.Interact_Handle;
-    axe_handle: UIK.Interact_Handle;
-    sawmill_handle: UIK.Interact_Handle;
-    auto_handle: UIK.Interact_Handle;
-    unlimited_backpack_handle: UIK.Interact_Handle;
-    unlimited_speed_handle: UIK.Interact_Handle;
+    backpack_handle: Interact_Result;
+    axe_handle: Interact_Result;
+    sawmill_handle: Interact_Result;
+    auto_handle: Interact_Result;
+    unlimited_backpack_handle: Interact_Result;
+    unlimited_speed_handle: Interact_Result;
 
     backpack_icon := get_asset(Texture_Asset, "$AO/ui/kit/Icons/backpacks/backpack_closed_med.png");
     axe_icon := get_asset(Texture_Asset, "icon_axe_006f01.png");
@@ -5229,7 +5229,7 @@ draw_upgrades_menu :: proc(player: Player) {
     if UIK.clicked(exit_handle) {
         player.show_upgrades_menu = false;
     }
-    if axe_handle.generation > 0 && UIK.clicked(axe_handle) {
+    if UIK.clicked(axe_handle) {
         if player.axe_tier < MAX_AXE_TIER {
             cost := axe_upgrade_cost(player.axe_tier);
             if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
@@ -5248,7 +5248,7 @@ draw_upgrades_menu :: proc(player: Player) {
             }
         }
     }
-    if backpack_handle.generation > 0 && UIK.clicked(backpack_handle) {
+    if UIK.clicked(backpack_handle) {
         if player.backpack_tier < MAX_BACKPACK_TIER {
             cost := backpack_upgrade_cost(player.backpack_tier);
             if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
@@ -5267,7 +5267,7 @@ draw_upgrades_menu :: proc(player: Player) {
             }
         }
     }
-    if sawmill_handle.generation > 0 && UIK.clicked(sawmill_handle) {
+    if UIK.clicked(sawmill_handle) {
         if player.sawmill_tier < MAX_SAWMILL_TIER {
             cost := sawmill_upgrade_cost(player.sawmill_tier);
             if Economy.can_withdraw_currency(player, GOLD_CURRENCY, cost) {
@@ -5286,13 +5286,13 @@ draw_upgrades_menu :: proc(player: Player) {
             }
         }
     }
-    if !player_has_auto_sawmill(player) && auto_handle.generation > 0 && UIK.clicked(auto_handle) {
+    if !player_has_auto_sawmill(player) && UIK.clicked(auto_handle) {
         Purchasing.prompt_purchase(player, AUTO_SAWMILL_PRODUCT_ID);
     }
-    if !player_has_unlimited_backpack(player) && unlimited_backpack_handle.generation > 0 && UIK.clicked(unlimited_backpack_handle) {
+    if !player_has_unlimited_backpack(player) && UIK.clicked(unlimited_backpack_handle) {
         Purchasing.prompt_purchase(player, UNLIMITED_BACKPACK_PRODUCT_ID);
     }
-    if !player_has_unlimited_move_speed(player) && unlimited_speed_handle.generation > 0 && UIK.clicked(unlimited_speed_handle) {
+    if !player_has_unlimited_move_speed(player) && UIK.clicked(unlimited_speed_handle) {
         Purchasing.prompt_purchase(player, UNLIMITED_MOVE_SPEED_PRODUCT_ID);
     }
 }
