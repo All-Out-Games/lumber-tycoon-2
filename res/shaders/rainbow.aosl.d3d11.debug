@@ -43,6 +43,9 @@ float4x4 final_mvp(vs_in inp) {
     float4 _2 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 2));
     float4 _3 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 3));
     float4x4 model_matrix = float4x4(_0, _1, _2, _3);
+    #ifdef AO_WEB
+    model_matrix = transpose(model_matrix);
+    #endif
     return mul(mvp, model_matrix);
 }
 #endif
@@ -115,6 +118,9 @@ float4x4 final_mvp(vs_in inp) {
     float4 _2 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 2));
     float4 _3 = matrices.Load(create_pixel_coord(inp.matrix_index.x*4 + 3));
     float4x4 model_matrix = float4x4(_0, _1, _2, _3);
+    #ifdef AO_WEB
+    model_matrix = transpose(model_matrix);
+    #endif
     return mul(mvp, model_matrix);
 }
 #endif

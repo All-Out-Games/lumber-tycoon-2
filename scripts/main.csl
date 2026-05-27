@@ -1089,7 +1089,7 @@ play_bacteria_tag_sfx :: proc(player: Player) {
 
     asset := get_asset(SFX_Asset, BACTERIA_TAG_SFX);
     desc := SFX.default_sfx_desc();
-    desc.local_only = true;
+    desc.specific_to_player = player;
     desc.volume = 0.72;
     desc.speed_perturb = 0.035;
     SFX.play(asset, desc);
@@ -1102,7 +1102,7 @@ start_sawmill_processing_loop :: proc(player: Player, sawmill_entity: Entity, ti
 
     asset := get_asset(SFX_Asset, SAWMILL_PROCESS_LOOP_SFX);
     desc := SFX.default_sfx_desc();
-    desc.local_only = true;
+    desc.specific_to_player = player;
     if #alive(sawmill_entity) {
         desc.entity_to_follow = sawmill_entity.id;
     }
@@ -1130,7 +1130,7 @@ start_polishing_processing_loop :: proc(player: Player, polisher_entity: Entity,
 
     asset := get_asset(SFX_Asset, SAWMILL_PROCESS_LOOP_SFX);
     desc := SFX.default_sfx_desc();
-    desc.local_only = true;
+    desc.specific_to_player = player;
     if #alive(polisher_entity) {
         desc.entity_to_follow = polisher_entity.id;
     }
@@ -1159,7 +1159,7 @@ play_sell_planks_sfx_for_player :: proc(player: Player, pos: v2) {
     if !player_local_feedback(player) return;
     asset := get_asset(SFX_Asset, "collect_coins_06b7d8.wav");
     desc := SFX.default_sfx_desc();
-    desc.local_only = true;
+    desc.specific_to_player = player;
     desc.set_position(pos);
     desc.volume = 0.42;
     desc.speed_perturb = 0.08;
@@ -2295,7 +2295,7 @@ Player :: class : Player_Base {
         if (is_local()) {
             asset := get_asset(SFX_Asset, GAME_START_MUSIC);
             desc := SFX.default_sfx_desc();
-            desc.local_only = true;
+            desc.specific_to_player = this;
             desc.loop = true;
             desc.volume = GAME_START_MUSIC_VOLUME;
             desc.channel = .MUSIC;

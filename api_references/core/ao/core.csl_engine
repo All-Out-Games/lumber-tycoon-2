@@ -11,9 +11,10 @@ Entity :: class {
     mark_teleported            :: method()                                                                                                                              #foreign "entity_mark_teleported";
     get_name                   :: method() -> string                                                                                                                    #foreign "entity_get_name";
     set_name                   :: method(new_name: string)                                                                                                              #foreign "entity_set_name";
-    compare_name               :: method(name: string) -> bool                                                                                                           #foreign "entity_compare_name";
+    compare_name               :: method(name: string) -> bool                                                                                                          #foreign "entity_compare_name";
     set_parent                 :: method(new_parent: Entity, keep_world_position: bool)                                                                                 #foreign "entity_set_parent";
     set_local_position         :: method(p: v2)                                                                                                                         #foreign "entity_set_local_position";
+    set_world_position         :: method(p: v2)                                                                                                                         #foreign "entity_set_world_position";
     lerp_local_position        :: method(target: v2, t: float)                                                                                                          #foreign "entity_lerp_local_position";
     add_local_position         :: method(delta: v2)                                                                                                                     #foreign "entity_add_local_position";
     set_local_scale            :: method(scale: v2)                                                                                                                     #foreign "entity_set_local_scale";
@@ -24,11 +25,16 @@ Entity :: class {
     destroy                    :: method()                                                                                                                              #foreign "entity_destroy";
     add_component_raw          :: method(t: typeid, userdata: Object = {}, on_before_start: proc(component: Component, userdata: Object) = {}) -> Component             #foreign "entity_add_component";
     get_component_raw          :: method(t: typeid) -> Component                                                                                                        #foreign "entity_get_component";
+    remove_component_raw       :: method(t: typeid)                                                                                                                     #foreign "entity_mark_component_for_removal";
     add_component :: proc(entity: Entity, $T: typeid, userdata: Object = {}, on_before_start: proc(component: Component, userdata: Object) = {}) -> T {
         return add_component_raw(entity, T, userdata, on_before_start).(T);
     }
     get_component :: proc(entity: Entity, $T: typeid) -> T {
         return get_component_raw(entity, T).(T);
+    }
+    // Defers removal until end-of-frame cleanup. The component remains addressable until that pass runs.
+    remove_component :: proc(entity: Entity, $T: typeid) {
+        remove_component_raw(entity, T);
     }
     get_first_component :: method() -> Component #foreign "entity_get_first_component";
     get_last_component  :: method() -> Component #foreign "entity_get_last_component";
@@ -37,9 +43,9 @@ Entity :: class {
     get_first_child     :: method() -> Entity    #foreign "entity_get_first_child";
     get_last_child      :: method() -> Entity    #foreign "entity_get_last_child";
     get_parent          :: method() -> Entity    #foreign "entity_get_parent";
-    id:                   u64                 #read_only #foreign "id";
+    id:                   u64                 #read_only #foreign;
     local_position:       v2                  #read_only("use set_local_position()") #foreign "_local_position";
-    world_position:       v2                  #read_only #foreign "cached_world_position";
+    world_position:       v2                  #read_only("use set_world_position()") #foreign "cached_world_position";
     local_rotation:       float               #read_only("use set_local_rotation()") #foreign "_local_rotation";
     world_rotation:       float               #read_only #foreign "cached_world_rotation";
     local_scale:          v2                  #read_only("use set_local_scale()") #foreign "_local_scale";
@@ -77,6 +83,8 @@ Component :: class {
     get_next_component_on_entity :: method() -> Component #foreign "component_get_next_component_on_entity";
     get_enabled :: method() -> bool #foreign "component_get_enabled";
     set_enabled :: method(new_value: bool) #foreign "component_set_enabled";
+    // Defers removal until end-of-frame cleanup. The component remains addressable until that pass runs.
+    remove_component :: method() #foreign "component_mark_for_removal";
     #interface ao_start                   :: proc(using this: Component);
     #interface ao_update                  :: proc(using this: Component, dt: float);
     #interface ao_late_update             :: proc(using this: Component, dt: float);
@@ -86,7 +94,7 @@ Component :: class {
     #interface ao_on_interactable_used    :: proc(using this: Component, interactable: Interactable);
     #interface ao_on_holding_interactable :: proc(using this: Component, interactable: Interactable);
     #interface ao_on_state_sync           :: proc(using this: Component);
-    component_id:             u64       #read_only #foreign "component_id";
+    component_id:             u64       #read_only #foreign;
     entity:                   Entity    #read_only #foreign "entity_csl_handle";
 } #gc_root #foreign_struct "Component_Base"
 
@@ -104,31 +112,56 @@ Sprite_Renderer :: class : Component {
     set_material :: method(material: Material, transfer_ownership: bool) #foreign "sprite_renderer_set_material";
     get_world_size :: method() -> v2 #foreign "sprite_renderer_get_world_size";
     #error_on_use "`Sprite_Renderer.tint` does not exist. Did you mean to use `Sprite_Renderer.color`?"
-    tint: v4           #foreign "tint";
+    tint: v4           #foreign;
     color: v4           #foreign "tint";
-    depth_offset: float #foreign "depth_offset";
-    layer: s32          #foreign "layer";
-    scale: v2           #foreign "scale";
-    flip_x: bool           #foreign "flip_x";
-    flip_y: bool           #foreign "flip_y";
-    mask_in_shadow: bool   #foreign "mask_in_shadow";
+    depth_offset: float #foreign;
+    layer: s32          #foreign;
+    scale: v2           #foreign;
+    flip_x: bool           #foreign;
+    flip_y: bool           #foreign;
+    mask_in_shadow: bool   #foreign;
 } #foreign_struct "Sprite_Renderer"
 
 Collider :: class : Component {
     overlaps_point :: method(point: v2) -> bool #foreign "collider_overlaps_point";
     overlaps :: method(other: Collider) -> bool #foreign "collider_overlaps";
+
+    is_trigger: bool #foreign;
+    make_navmesh_loop: bool #foreign;
+    flip_navmesh_loop: bool #foreign;
+
+    on_trigger_start: (proc(self: Collider, other: Collider)) #foreign "on_trigger_start_proc_index";
+    on_trigger_stay: (proc(self: Collider, other: Collider)) #foreign "on_trigger_stay_proc_index";
+    on_trigger_end: (proc(self: Collider, other: Collider)) #foreign "on_trigger_end_proc_index";
 } #foreign_struct "Collider"
 
 Circle_Collider :: class : Collider {
+    radius: float #foreign "size";
+    offset: v2 #foreign;
 } #foreign_struct "Circle_Collider"
 
 Box_Collider :: class : Collider {
+    get_points_local :: method(out_points: ref [..]v2) -> int #foreign "box_collider_get_points_local";
+    get_points_world :: method(out_points: ref [..]v2) -> int #foreign "box_collider_get_points_world";
+    get_min_and_max_local :: method() -> v2, v2 #foreign "box_collider_get_min_and_max_local";
+    get_min_and_max_world :: method() -> v2, v2 #foreign "box_collider_get_min_and_max_world";
+    size: v2   #foreign;
+    offset: v2 #foreign;
 } #foreign_struct "Box_Collider"
 
 Polygon_Collider :: class : Collider {
+    get_points_local :: method(out_points: ref [..]v2) -> int #foreign "polygon_collider_get_points_local";
+    get_points_world :: method(out_points: ref [..]v2) -> int #foreign "polygon_collider_get_points_world";
+    get_min_and_max_local :: method() -> v2, v2 #foreign "polygon_collider_get_min_and_max_local";
+    get_min_and_max_world :: method() -> v2, v2 #foreign "polygon_collider_get_min_and_max_world";
 } #foreign_struct "Polygon_Collider"
 
 Edge_Collider :: class : Collider {
+    get_points_local :: method(out_points: ref [..]v2) -> int #foreign "edge_collider_get_points_local";
+    get_points_world :: method(out_points: ref [..]v2) -> int #foreign "edge_collider_get_points_world";
+    get_min_and_max_local :: method() -> v2, v2 #foreign "edge_collider_get_min_and_max_local";
+    get_min_and_max_world :: method() -> v2, v2 #foreign "edge_collider_get_min_and_max_world";
+    is_loop: bool #foreign;
 } #foreign_struct "Edge_Collider"
 
 Rigidbody :: class : Component {
@@ -143,6 +176,10 @@ Navmesh :: class : Component {
 
 Navmesh_Loop :: class : Component {
 } #foreign_struct "Navmesh_Loop"
+
+Pathfind_Tester :: class : Component {
+    agent_radius: float #foreign;
+} #foreign_struct "Pathfind_Tester"
 
 Tilemap_Component :: class : Component {
 } #foreign_struct "Tilemap_Component"
@@ -164,11 +201,11 @@ Interactable :: class : Component {
         on_interact_proc = try_get_constant_procedure(struct_type, "on_interact", proc(t: Component, player: Player));
         on_holding_proc = try_get_constant_procedure(struct_type, "on_holding", proc(t: Component, player: Player));
     }
-    offset:             v2        #foreign "offset";
-    prompt_offset:      v2        #foreign "prompt_offset";
-    radius:             float     #foreign "radius";
-    required_hold_time: float     #foreign "required_hold_time";
-    priority:           s64       #foreign "priority";
+    offset:             v2        #foreign;
+    prompt_offset:      v2        #foreign;
+    radius:             float     #foreign;
+    required_hold_time: float     #foreign;
+    priority:           s64       #foreign;
     listener: Component #foreign "csl_listener"         #read_only("use set_listener()");
     can_use_proc:     (proc(t: Component, player: Player) -> bool) #foreign "csl_can_use_proc"     #read_only("use set_listener()");
     on_interact_proc: (proc(t: Component, player: Player))         #foreign "csl_on_interact_proc" #read_only("use set_listener()");
@@ -179,9 +216,9 @@ Interactable :: class : Component {
 
 
 Spine_Animator :: class : Component {
-    depth_offset: float #foreign "depth_offset";
-    layer: s32 #foreign "layer";
-    mask_in_shadow: bool #foreign "mask_in_shadow";
+    depth_offset: float #foreign;
+    layer: s32 #foreign;
+    mask_in_shadow: bool #foreign;
     instance: Spine_Instance #read_only #foreign "instance_csl_handle";
     using _instance_fields: Spine_Instance_Fields #read_only #foreign "instance_csl_handle";
     set_color_replace_color :: method(color: Color_Replace_Color) #foreign "spine_animator_set_color_replace_color";
@@ -208,13 +245,13 @@ LOS_Caster :: class : Component {
 } #foreign_struct "LOS_Caster"
 
 Shadow_Caster :: class : Component {
-    softness: v2 #foreign "softness";
+    softness: v2 #foreign;
 } #foreign_struct "Shadow_Caster"
 
 Light :: class : Component {
-    color:     v4    #foreign "color";
+    color:     v4    #foreign;
     radii:     v2    #foreign "radi";
-    intensity: float #foreign "intensity";
+    intensity: float #foreign;
 } #foreign_struct "Light"
 
 Spine_Event_Data :: struct {
@@ -230,10 +267,10 @@ Attachment_Draw_Mode :: enum {
 }
 
 Attachment_Desc :: struct {
-    draw_mode:        Attachment_Draw_Mode #foreign "draw_mode";
-    offset:           v2                   #foreign "offset";
-    scale:            v2                   #foreign "scale";
-    rotation_degrees: float                #foreign "rotation_degrees";
+    draw_mode:        Attachment_Draw_Mode #foreign;
+    offset:           v2                   #foreign;
+    scale:            v2                   #foreign;
+    rotation_degrees: float                #foreign;
     color:            v4                   #foreign "tint";
     default :: proc() -> Attachment_Desc {
         #static initted: bool;
@@ -249,47 +286,52 @@ Attachment_Desc :: struct {
 } #foreign_struct "Attachment_Desc"
 
 Camera :: struct {
-    position:            v2            #foreign "position";
-    position_last_frame: v2 #read_only #foreign "position_last_frame";
+    position:            v2            #foreign;
+    position_last_frame: v2 #read_only #foreign;
     size:                float         #foreign "orthographic_size";
-    follow_player:       bool          #foreign "follow_player";
+    follow_player:       bool          #foreign;
+
+    is_visible :: proc(point: v2, apron: float = 1) -> bool #foreign "camera_is_visible_point";
+    is_visible :: proc(rect: Rect, apron: float = 1) -> bool #foreign "camera_is_visible";
+    is_visible :: proc(sprite_renderer: Sprite_Renderer, apron: float = 1) -> bool #foreign "camera_is_visible_sprite_renderer";
+    is_visible :: proc(spine_animator: Spine_Animator, apron: float = 1) -> bool #foreign "camera_is_visible_spine_animator";
 } #foreign_struct "Actual_Camera"
 
 Post_Processing :: struct {
     Bloom_Config :: struct {
-        bloom_amount: float #foreign "bloom_amount";
+        bloom_amount: float #foreign;
     } #foreign_struct "Bloom_Config"
 
     Color_Grade_Config :: struct {
-        color_filter: v3    #foreign "color_filter";
-        saturation:   float #foreign "saturation";
-        contrast:     float #foreign "contrast";
+        color_filter: v3    #foreign;
+        saturation:   float #foreign;
+        contrast:     float #foreign;
     } #foreign_struct "Color_Grade_Config"
 
     Chromatic_Aberration_Config :: struct {
         channel_offsets: v3 #foreign "offsets";
-        focal_point:     v2 #foreign "focal_point";
+        focal_point:     v2 #foreign;
     } #foreign_struct "Chromatic_Aberration_Config"
 
     Blur_Config :: struct {
-        directions: float #foreign "directions";
-        quality:    float #foreign "quality";
-        size:       float #foreign "size";
+        directions: float #foreign;
+        quality:    float #foreign;
+        size:       float #foreign;
     } #foreign_struct "Blur_Config"
 
     Film_Grain_Config :: struct {
-        strength:    float #foreign "strength";
-        noise_scale: float #foreign "noise_scale";
+        strength:    float #foreign;
+        noise_scale: float #foreign;
     } #foreign_struct "Film_Grain_Config"
 
     Vignette_Config :: struct {
-        radius:   float #foreign "radius";
-        softness: float #foreign "softness";
+        radius:   float #foreign;
+        softness: float #foreign;
     } #foreign_struct "Vignette_Config"
 
     bloom               :: proc(config: Bloom_Config)                 #foreign "post_processing_bloom";
     color_grade         :: proc(config: Color_Grade_Config)           #foreign "post_processing_color_grade";
-    chromatic_aberration :: proc(config: Chromatic_Aberration_Config)  #foreign "post_processing_chromatic_aberration";
+    chromatic_aberration :: proc(config: Chromatic_Aberration_Config) #foreign "post_processing_chromatic_aberration";
     blur                :: proc(config: Blur_Config)                  #foreign "post_processing_blur";
     film_grain          :: proc(config: Film_Grain_Config)            #foreign "post_processing_film_grain";
     vignette            :: proc(config: Vignette_Config)              #foreign "post_processing_vignette";
@@ -298,18 +340,18 @@ Post_Processing :: struct {
 AO_Player :: class : Component {
     animator:               Spine_Animator      #read_only #foreign "animator_csl_handle";
     agent:                  Movement_Agent      #read_only #foreign "agent_csl_handle";
-    camera:                 Camera                         #foreign "camera";
-    device_kind:            Device_Kind         #read_only #foreign "device_kind";
-    do_name_color_override: bool                           #foreign "do_name_color_override";
-    name_color_override:    v4                             #foreign "name_color_override";
+    camera:                 Camera                         #foreign;
+    device_kind:            Device_Kind         #read_only #foreign;
+    do_name_color_override: bool                           #foreign;
+    name_color_override:    v4                             #foreign;
     avatar_color:           Color_Replace_Color #read_only #foreign "color_index";
     default_inventory:      Inventory           #read_only #foreign "player_inventory_csl_handle";
-    comms_channel_listen_mask: u64                         #foreign "comms_channel_listen_mask";
-    comms_channel_speak_mask:  u64                         #foreign "comms_channel_speak_mask";
+    comms_channel_listen_mask: u64                         #foreign;
+    comms_channel_speak_mask:  u64                         #foreign;
     username_rect:             Rect                        #foreign "final_name_rect";
-    full_nameplate_rect:       Rect                        #foreign "full_nameplate_rect";
-    input_this_frame:          v2                          #foreign "input_this_frame";
-    input_override:            v2                          #foreign "input_override";
+    full_nameplate_rect:       Rect                        #foreign;
+    input_this_frame:          v2                          #foreign;
+    input_override:            v2                          #foreign;
     player_for_prediction:     Player                      #foreign "player_for_prediction_csl_handle";
 } #foreign_struct "Player"
 
@@ -321,10 +363,11 @@ Movement_Agent :: class : Component {
     }
     set_path_target        :: method(target: v2, speed: float) -> Set_Path_Target_Result #foreign "movement_agent_set_path_target";
     set_navmesh_to_lock_to :: method(navmesh: Navmesh) #foreign "movement_agent_set_navmesh_to_lock_to";
-    movement_speed:   float #foreign "movement_speed";
-    friction:         float #foreign "friction";
-    velocity:         v2    #foreign "velocity";
-    input_this_frame: v2    #foreign "input_this_frame";
+    movement_speed:   float #foreign;
+    agent_radius:     float #foreign;
+    friction:         float #foreign;
+    velocity:         v2    #foreign;
+    input_this_frame: v2    #foreign;
 } #foreign_struct "Movement_Agent"
 
 Asset :: class {
@@ -380,7 +423,7 @@ State_Machine :: class {
     create_layer     :: method(layer_name: string, track: s64) -> State_Machine_Layer #foreign "state_machine_create_layer";
     create_variable  :: method(variable_name: string, kind: State_Machine_Variable.Kind) -> State_Machine_Variable #foreign "state_machine_create_variable";
     try_get_variable :: method(variable_name: string) -> State_Machine_Variable #foreign "state_machine_try_get_variable";
-    debug_enabled: bool            #foreign "debug_enabled";
+    debug_enabled: bool #foreign;
 } #gc_root #foreign_struct "State_Machine"
 
 State_Machine_Layer :: class {
@@ -398,7 +441,7 @@ State_Machine_Layer :: class {
 
 State_Machine_State :: class {
     get_name :: method() -> string #foreign "state_machine_state_get_name";
-    speed: float                          #foreign "speed";
+    speed: float #foreign;
 } #gc_root #foreign_struct "State_Machine_State"
 
 State_Machine_Variable :: class {
@@ -435,19 +478,21 @@ SFX_Channel :: enum {
 }
 
 SFX_Desc :: struct {
-    local_only:       bool                       #foreign "local_only";
-    positional:       bool                       #foreign "positional";
-    position:         v2              #read_only("use set_position()") #foreign "position";
-    delay:            float                      #foreign "delay";
-    volume:           float                      #foreign "volume";
-    speed:            float                      #foreign "speed";
-    volume_perturb:   float                      #foreign "volume_perturb";
-    speed_perturb:    float                      #foreign "speed_perturb";
-    range_multiplier: float                      #foreign "range_multiplier";
-    loop_timeout:     float                      #foreign "loop_timeout";
-    entity_to_follow: u64                        #foreign "entity_to_follow";
-    loop:             bool                       #foreign "loop";
-    channel:          SFX_Channel                #foreign "channel";
+    #deprecate_hard "Use specific_to_player."
+    local_only:       bool                  #foreign;
+    specific_to_player: Player              #foreign "specific_to_player_entity_id";
+    positional:       bool                  #foreign;
+    position:         v2                    #foreign #read_only("use set_position()");
+    delay:            float                 #foreign;
+    volume:           float                 #foreign;
+    speed:            float                 #foreign;
+    volume_perturb:   float                 #foreign;
+    speed_perturb:    float                 #foreign;
+    range_multiplier: float                 #foreign;
+    loop_timeout:     float                 #foreign;
+    entity_to_follow: u64                   #foreign;
+    loop:             bool                  #foreign;
+    channel:          SFX_Channel           #foreign;
     set_position :: method(p: v2) {
         positional = true;
         #unsafe position = p;
@@ -466,143 +511,125 @@ Text_Settings :: struct {
         RIGHT;
     }
     font:                   Font_Asset           #foreign "font_id";
-    size:                   float                #foreign "size";
-    color:                  v4                   #foreign "color";
-    valign:                 Vertical_Alignment   #foreign "valign";
-    halign:                 Horizontal_Alignment #foreign "halign";
-    word_wrap:              bool                 #foreign "word_wrap";
-    overflow_wrap:          bool                 #foreign "overflow_wrap";
-    word_wrap_start_offset: float                #foreign "word_wrap_start_offset";
-    offset:                 v2                   #foreign "offset";
-    do_drop_shadow:         bool                 #foreign "do_drop_shadow";
-    drop_shadow_offset:     v2                   #foreign "drop_shadow_offset";
-    drop_shadow_color:      v4                   #foreign "drop_shadow_color";
-    do_outline:             bool                 #foreign "do_outline";
-    outline_thickness:      float                #foreign "outline_thickness";
-    outline_color:          v4                   #foreign "outline_color";
-    weight:                 float                #foreign "weight";
-    slant:                  float                #foreign "slant";
-    spacing_multiplier:     float                #foreign "spacing_multiplier";
-    line_height_multiplier: float                #foreign "line_height_multiplier";
-    do_autofit:             bool                 #foreign "do_autofit";
-    autofit_min_size:       float                #foreign "autofit_min_size";
-    autofit_max_size:       float                #foreign "autofit_max_size";
-    autofit_iters:          s32                  #foreign "autofit_iters";
+    size:                   float                #foreign;
+    color:                  v4                   #foreign;
+    valign:                 Vertical_Alignment   #foreign;
+    halign:                 Horizontal_Alignment #foreign;
+    word_wrap:              bool                 #foreign;
+    overflow_wrap:          bool                 #foreign;
+    word_wrap_start_offset: float                #foreign;
+    offset:                 v2                   #foreign;
+    do_drop_shadow:         bool                 #foreign;
+    drop_shadow_offset:     v2                   #foreign;
+    drop_shadow_color:      v4                   #foreign;
+    do_outline:             bool                 #foreign;
+    outline_thickness:      float                #foreign;
+    outline_color:          v4                   #foreign;
+    weight:                 float                #foreign;
+    slant:                  float                #foreign;
+    spacing_multiplier:     float                #foreign;
+    line_height_multiplier: float                #foreign;
+    do_autofit:             bool                 #foreign;
+    autofit_min_size:       float                #foreign;
+    autofit_max_size:       float                #foreign;
+    autofit_iters:          s32                  #foreign;
 } #foreign_struct "UI::Text_Settings"
 
 Texture_Nine_Slice_Data :: struct {
-    slice:       v4    #foreign "slice";
-    slice_scale: float #foreign "slice_scale";
+    slice:       v4    #foreign;
+    slice_scale: float #foreign;
 } #foreign_struct "Texture_Nine_Slice_Data"
 
 Button_Settings :: struct {
-    color:                       v4                      #foreign "color";
-    hovered_color:               v4                      #foreign "hovered_color";
-    pressed_color:               v4                      #foreign "pressed_color";
-    disabled_color:              v4                      #foreign "disabled_color";
-    color_multiplier:            v4                      #foreign "color_multiplier";
-    background_color_multiplier: v4                      #foreign "background_color_multiplier";
-    press_scaling:               float                   #foreign "press_scaling";
-    sprite:                      Texture_Asset           #foreign "sprite";
-    sprite_hovered:              Texture_Asset           #foreign "sprite_hovered";
-    sprite_pressed:              Texture_Asset           #foreign "sprite_pressed";
-    sprite_padding:              v4                      #foreign "sprite_padding";
-    nine_slice_data:             Texture_Nine_Slice_Data #foreign "nine_slice_data";
-    hover_offset:                v2                      #foreign "hover_offset";
-    text_pressed_offset:         v2                      #foreign "text_pressed_offset";
-    text_unpressed_offset:       v2                      #foreign "text_unpressed_offset";
-    click_sound:                 SFX_Asset               #foreign "click_sound";
-    click_sound_desc:            SFX_Desc                #foreign "click_sound_desc";
-    stay_hot_while_active:       bool                    #foreign "stay_hot_while_active";
-    return_to_center_to_cancel:  bool                    #foreign "return_to_center_to_cancel";
-    sprite_fit_aspect:           bool                    #foreign "sprite_fit_aspect";
-    keybind:                     u64                     #foreign "keybind";
+    color:                       v4                      #foreign;
+    hovered_color:               v4                      #foreign;
+    pressed_color:               v4                      #foreign;
+    disabled_color:              v4                      #foreign;
+    color_multiplier:            v4                      #foreign;
+    background_color_multiplier: v4                      #foreign;
+    press_scaling:               float                   #foreign;
+    sprite:                      Texture_Asset           #foreign;
+    sprite_hovered:              Texture_Asset           #foreign;
+    sprite_pressed:              Texture_Asset           #foreign;
+    sprite_padding:              v4                      #foreign;
+    nine_slice_data:             Texture_Nine_Slice_Data #foreign;
+    hover_offset:                v2                      #foreign;
+    text_pressed_offset:         v2                      #foreign;
+    text_unpressed_offset:       v2                      #foreign;
+    click_sound:                 SFX_Asset               #foreign;
+    click_sound_desc:            SFX_Desc                #foreign;
+    stay_hot_while_active:       bool                    #foreign;
+    return_to_center_to_cancel:  bool                    #foreign;
+    sprite_fit_aspect:           bool                    #foreign;
+    keybind:                     u64                     #foreign;
 } #foreign_struct "UI::Button_Settings"
 
 Interact_Mouse_Button :: struct {
-    time_last_clicked: float #foreign "time_last_clicked";
-    active:            bool  #foreign "active";
-    newly_active:      bool  #foreign "newly_active";
-    clicked:           bool  #foreign "clicked";
-    double_clicked:    bool  #foreign "double_clicked";
-    released:          bool  #foreign "released";
+    time_last_clicked: float #foreign;
+    active:            bool  #foreign;
+    newly_active:      bool  #foreign;
+    clicked:           bool  #foreign;
+    double_clicked:    bool  #foreign;
+    released:          bool  #foreign;
 } #foreign_struct "UI::Mouse_Button_Data"
 
 Interact_Result :: struct {
-    hovering:             bool              #foreign "hovering";
-    just_pressed:         bool              #foreign "just_pressed";
-    pressed:              bool              #foreign "pressed";
-    released:             bool              #foreign "released";
-    active:               bool              #foreign "active";
-    clicked:              bool              #foreign "clicked";
-    double_clicked:       bool              #foreign "double_clicked";
-    enter_pressed:        bool              #foreign "enter_pressed";
-    tab_pressed:          bool              #foreign "tab_pressed";
-    escape_pressed:       bool              #foreign "escape_pressed";
-    modified_text_input:  bool              #foreign "modified_text_input";
-    became_inactive:      bool              #foreign "became_inactive";
-    right:                Interact_Mouse_Button #foreign "right";
-    active_t:             float             #foreign "active_t";
-    active_t_eased:       float             #foreign "active_t_eased";
-    hover_t:              float             #foreign "hover_t";
-    hover_t_eased:        float             #foreign "hover_t_eased";
-    clicked_t:            float             #foreign "clicked_t";
-    clicked_t_eased:      float             #foreign "clicked_t_eased";
-    dropped_payload:      bool              #foreign "dropped_payload";
-    can_receive_payload:  bool              #foreign "can_receive_payload";
-    will_receive_payload: bool              #foreign "will_receive_payload";
-    drag_drop_payload:    Object            #foreign "drag_drop_payload";
-    button_color:         v4                #foreign "button_color";
-    hover_offset:         v2                #foreign "hover_offset";
-    text_rect_is_valid:   bool              #foreign "text_rect_is_valid";
-    rect:                 Rect              #foreign "rect";
-    text_rect_:           Rect              #foreign "text_rect_";
-    ui_scale:             float             #foreign "ui_scale";
-    mouse_position:       v2                #foreign "mouse_position";
+    hovering:             bool                     #foreign;
+    just_pressed:         bool                     #foreign;
+    pressed:              bool                     #foreign;
+    released:             bool                     #foreign;
+    active:               bool                     #foreign;
+    clicked:              bool                     #foreign;
+    double_clicked:       bool                     #foreign;
+    enter_pressed:        bool                     #foreign;
+    tab_pressed:          bool                     #foreign;
+    escape_pressed:       bool                     #foreign;
+    modified_text_input:  bool                     #foreign;
+    became_inactive:      bool                     #foreign;
+    right:                Interact_Mouse_Button    #foreign;
+    active_t:             float                    #foreign;
+    active_t_eased:       float                    #foreign;
+    hover_t:              float                    #foreign;
+    hover_t_eased:        float                    #foreign;
+    clicked_t:            float                    #foreign;
+    clicked_t_eased:      float                    #foreign;
+    dropped_payload:      bool                     #foreign;
+    can_receive_payload:  bool                     #foreign;
+    will_receive_payload: bool                     #foreign;
+    drag_drop_payload:    Object                   #foreign;
+    button_color:         v4                       #foreign;
+    hover_offset:         v2                       #foreign;
+    text_rect_is_valid:   bool                     #foreign;
+    rect:                 Rect                     #foreign;
+    text_rect_:           Rect                     #foreign;
+    ui_scale:             float                    #foreign;
+    mouse_position:       v2                       #foreign;
 } #foreign_struct "UI::Interact_Result"
 
 Item_Definition_Desc :: struct {
-    id:              string          #foreign "id";
-    name:            string          #foreign "name";
-    icon:            Texture_Asset   #foreign "icon";
-    stack_size:      s64             #foreign "stack_size";
-    tier:            Item_Tier       #foreign "tier";
+    id:              string          #foreign;
+    name:            string          #foreign;
+    icon:            Texture_Asset   #foreign;
+    stack_size:      s64             #foreign;
+    tier:            Item_Tier       #foreign;
 } #foreign_struct "CSL_Item_Definition_Desc"
 
-Item_Definition_Base :: class {
-    id:   string          #read_only #foreign "csl_id";
-    name: string          #read_only #foreign "csl_name";
-    type: typeid          #read_only #foreign "csl_defn_class_typeid";
-    instance_type: typeid #read_only #foreign "csl_inst_class_typeid";
-    tier: Item_Tier       #read_only #foreign "tier";
-} #gc_root #foreign_struct "Item_Definition"
-
-Item_Instance_Base :: class {
-    inventory: Inventory  #read_only #foreign "inventory_csl_handle";
-    slot_index: s64       #read_only #foreign "inventory_slot";
-    quantity:   s64       #read_only #foreign "quantity";
-} #gc_root #foreign_struct "Item_Instance"
-
-Inventory_Base :: class {
-    capacity: s64   #read_only #foreign "capacity";
-} #gc_root #foreign_struct "Inventory"
-
 Inventory_Draw_Options :: struct {
-    title:                      string  #foreign "title";
-    show_exit_button:           bool    #foreign "show_exit_button";
-    show_scroll_bar:            bool    #foreign "show_scroll_bar";
-    show_background:            bool    #foreign "show_background";
-    allow_drag_drop:            bool    #foreign "allow_drag_drop";
-    drag_drop_color_multiplier: v4      #foreign "drag_drop_color_multiplier";
-    hotbar_item_count:          s32     #foreign "hotbar_item_count";
-    columns:                    s32     #foreign "columns";
-    rows:                       s32     #foreign "rows";
-    force_select_hotbar_index:  s32     #foreign "force_select_hotbar_index";
-    hide_bag_button:            bool    #foreign "hide_bag_button";
-    enable_selection:           bool    #foreign "enable_selection";
-    scroll_item_selection:      bool    #foreign "scroll_item_selection";
-    keyboard_item_selection:    bool    #foreign "keyboard_item_selection";
-    enable_use_from_hotbar:     bool    #foreign "enable_use_from_hotbar";
+    title:                      string  #foreign;
+    show_exit_button:           bool    #foreign;
+    show_scroll_bar:            bool    #foreign;
+    show_background:            bool    #foreign;
+    allow_drag_drop:            bool    #foreign;
+    drag_drop_color_multiplier: v4      #foreign;
+    hotbar_item_count:          s32     #foreign;
+    columns:                    s32     #foreign;
+    rows:                       s32     #foreign;
+    force_select_hotbar_index:  s32     #foreign;
+    hide_bag_button:            bool    #foreign;
+    enable_selection:           bool    #foreign;
+    scroll_item_selection:      bool    #foreign;
+    keyboard_item_selection:    bool    #foreign;
+    enable_use_from_hotbar:     bool    #foreign;
     default :: proc() -> Inventory_Draw_Options {
         desc: Inventory_Draw_Options;
         desc.force_select_hotbar_index = -1;
@@ -617,12 +644,12 @@ Inventory_Draw_Options :: struct {
 } #foreign_struct "Inventory_Draw_Options"
 
 Draw_Hotbar_Result :: struct {
-    selected_item:       Item_Instance #foreign "selected_item";
-    selected_item_index: s64           #foreign "selected_item_index";
-    dropped_item:        Item_Instance #foreign "dropped_item";
-    entire_rect:         Rect          #foreign "entire_rect";
-    inventory_open:      bool          #foreign "inventory_open";
-    inventory_open_t:    float         #foreign "inventory_open_t";
+    selected_item:       Item_Instance #foreign;
+    selected_item_index: s64           #foreign;
+    dropped_item:        Item_Instance #foreign;
+    entire_rect:         Rect          #foreign;
+    inventory_open:      bool          #foreign;
+    inventory_open_t:    float         #foreign;
 } #foreign_struct "Inventory_Manager::Draw_Hotbar_Result"
 
 Game :: struct {
@@ -1808,11 +1835,13 @@ Item_Transaction_Entry :: struct {
     inventory: Inventory;
 }
 
-Inventory :: class : Inventory_Base {
+Inventory :: class {
     get_item :: proc(inventory: Inventory, index: s64) -> Item_Instance #foreign "inventory_get_item";
-}
 
-Item_Definition :: class : Item_Definition_Base {
+    capacity: s64   #read_only #foreign;
+} #gc_root #foreign_struct "Inventory"
+
+Item_Definition :: class {
     #deprecate_soft "Use the `name` field instead of this getter."
     get_name :: method() -> string {
         return name;
@@ -1824,11 +1853,21 @@ Item_Definition :: class : Item_Definition_Base {
     }
 
     get_icon       :: method() -> Texture_Asset #foreign "item_definition_get_icon";
-}
 
-Item_Instance :: class : Item_Instance_Base {
+    id:   string          #read_only #foreign "csl_id";
+    name: string          #read_only #foreign "csl_name";
+    type: typeid          #read_only #foreign "csl_defn_class_typeid";
+    instance_type: typeid #read_only #foreign "csl_inst_class_typeid";
+    tier: Item_Tier       #read_only #foreign;
+} #gc_root #foreign_struct "Item_Definition"
+
+Item_Instance :: class {
     get_definition :: method() -> Item_Definition #foreign "item_instance_get_definition";
-}
+
+    inventory: Inventory  #read_only #foreign "inventory_csl_handle";
+    slot_index: s64       #read_only #foreign "inventory_slot";
+    quantity:   s64       #read_only #foreign;
+} #gc_root #foreign_struct "Item_Instance"
 
 Notifier :: struct {
     notify :: proc(fmt: string, args: [^]any = {}) #foreign "notifier_notify";
@@ -1962,14 +2001,14 @@ Color_Replace_Color :: enum {
 }
 
 Spine_Instance_Fields :: class {
-    state_machine:    State_Machine  #read_only("use set_state_machine()") #foreign "state_machine_csl_handle";
-    color_multiplier: v4                        #foreign "color_multiplier";
-    scale:            v2                        #foreign "skeleton_scale";
-    speed_multiplier: float                     #foreign "speed_multiplier";
-    color_replace_color: Color_Replace_Color #read_only("use set_color_replace_color()") #foreign "last_set_crewchsia_color";
-    on_event_userdata:           Object #read_only("use set_on_event()") #foreign "csl_on_event_userdata";
-    on_animation_start_userdata: Object #read_only("use set_on_animation_start()") #foreign "csl_on_animation_start_userdata";
-    on_animation_end_userdata:   Object #read_only("use set_on_animation_end()") #foreign "csl_on_animation_end_userdata";
+    state_machine:    State_Machine                  #foreign "state_machine_csl_handle"           #read_only("use set_state_machine()");
+    color_multiplier: v4                             #foreign;
+    scale:            v2                             #foreign "skeleton_scale";
+    speed_multiplier: float                          #foreign;
+    color_replace_color: Color_Replace_Color         #foreign "last_set_crewchsia_color"           #read_only("use set_color_replace_color()");
+    on_event_userdata:           Object              #foreign "csl_on_event_userdata"              #read_only("use set_on_event()");
+    on_animation_start_userdata: Object              #foreign "csl_on_animation_start_userdata"    #read_only("use set_on_animation_start()");
+    on_animation_end_userdata:   Object              #foreign "csl_on_animation_end_userdata"      #read_only("use set_on_animation_end()");
 } #gc_root #foreign_struct "Spine_Instance"
 
 Spine_Instance :: class : Spine_Instance_Fields {
@@ -3012,26 +3051,16 @@ UIK :: struct {
     Text_Override_WORD_WRAP :: 16;
     Text_Override_OUTLINE   :: 32;
 
-    Scroll_None           :: 0;
-    Scroll_Horizontal     :: 4096;
-    Scroll_Vertical       :: 8192;
-    Scroll_Unbounded      :: 16384;
-    Scroll_Zoom           :: 32768;
-    Scroll_Clamp          :: 131072;
-    Scroll_Auto_Scrollbar :: 262144;
-    Scrollbar_Left        :: 524288;
-    Scrollbar_Top         :: 1048576;
-    Scroll_Default        :: Scroll_Vertical | Scroll_Clamp;
-    SCROLL_NONE           :: Scroll_None;
-    SCROLL_HORIZONTAL     :: Scroll_Horizontal;
-    SCROLL_VERTICAL       :: Scroll_Vertical;
-    SCROLL_UNBOUNDED      :: Scroll_Unbounded;
-    SCROLL_ZOOM           :: Scroll_Zoom;
-    SCROLL_CLAMP          :: Scroll_Clamp;
-    SCROLL_AUTO_SCROLLBAR :: Scroll_Auto_Scrollbar;
-    SCROLLBAR_LEFT        :: Scrollbar_Left;
-    SCROLLBAR_TOP         :: Scrollbar_Top;
-    SCROLL_DEFAULT        :: Scroll_Default;
+    SCROLL_NONE           :: 0;
+    SCROLL_HORIZONTAL     :: 4096;
+    SCROLL_VERTICAL       :: 8192;
+    SCROLL_UNBOUNDED      :: 16384;
+    SCROLL_ZOOM           :: 32768;
+    SCROLL_CLAMP          :: 131072;
+    SCROLL_AUTO_SCROLLBAR :: 262144;
+    SCROLLBAR_LEFT        :: 524288;
+    SCROLLBAR_TOP         :: 1048576;
+    SCROLL_DEFAULT        :: SCROLL_VERTICAL | SCROLL_CLAMP;
 
     Panel_Background_Kind :: enum {
         BACKGROUND_NONE;
@@ -3779,6 +3808,7 @@ UIK :: struct {
     panel_begin :: proc(desc: Panel_Desc) #foreign "uik_panel_begin";
     panel_begin_interactive :: proc(id: string, desc: Panel_Desc, disabled: bool = false) -> Interact_Result #foreign "uik_panel_begin_interactive";
     resolve_parent_tint :: proc() -> v4 #foreign "uik_resolve_parent_tint";
+    current_window_rect :: proc() -> Rect #foreign "uik_current_window_rect";
     panel_end :: proc() #foreign "uik_panel_end";
 
     #deprecate_soft "Use the text procedure with this signature: proc(desc: Text_Desc, fmt: string, args: [^]any = {})"
@@ -3791,7 +3821,7 @@ UIK :: struct {
     image_nine :: proc(texture: Texture_Asset, nine_slice: Texture_Nine_Slice_Data, tint: v4 = {1, 1, 1, 1}) #foreign "uik_image_nine";
     spacer :: proc(width: Size, height: Size) #foreign "uik_spacer";
     progress_bar :: proc(track_desc: Panel_Desc) #foreign "uik_progress_bar";
-    scroll_area_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_flags: s64 = Scroll_Default) #foreign "uik_scroll_area_begin";
+    scroll_area_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_flags: s64 = SCROLL_DEFAULT) #foreign "uik_scroll_area_begin";
     scroll_area_end :: proc() #foreign "uik_scroll_area_end";
     grid_begin :: proc(columns: s64, cell_height: float) #foreign "uik_grid_begin";
     grid_end :: proc() #foreign "uik_grid_end";
@@ -3848,6 +3878,19 @@ UIK :: struct {
         desc.tint = tint;
         desc.text_desc = text_title();
         return desc;
+    }
+
+    title_window_width :: proc() -> float {
+        rect := current_window_rect();
+        scale := UI.get_current_scale_factor();
+        if scale <= 0 {
+            return rect.width();
+        }
+        return rect.width() / scale;
+    }
+
+    title_is_compact :: proc() -> bool {
+        return title_window_width() < 400;
     }
 
     title_area_desc :: proc(title: string, style: Title_Area_Style = .SIMPLE, show_exit: bool = true) -> Title_Area_Desc {
@@ -3907,34 +3950,45 @@ UIK :: struct {
     }
 
     title :: proc(label: string, icon: Texture_Asset, desc: Title_Desc) {
+        compact := title_is_compact();
         bg : Panel_Background_Kind = .BANNER_NORMAL;
         if desc.style == .FANCY { bg = .BANNER_FANCY; }
         panel := panel_styled(bg);
         panel.axis = .HORIZONTAL;
-        panel.width = flex(1);
+        panel.width = flex_fit(1);
         panel.height = fit();
         panel.cross_align = .CENTER;
         panel.main_align = .CENTER;
         panel.tint = desc.tint;
         panel.padding = v4{12, 20, 12, 20};
         panel.gap = 8;
+        text_desc := desc.text_desc;
+        if compact {
+            panel.padding = v4{8, 12, 8, 12};
+            panel.gap = 5;
+            text_desc.set_size_mult(0.82);
+        }
         panel_begin(panel);
         if icon != null { image(icon); }
-        text(label, desc.text_desc);
+        text(label, text_desc);
         panel_end();
     }
 
     title_area :: proc(desc: Title_Area_Desc) -> Interact_Result {
         exit_result: Interact_Result;
         has_bg := desc.style != .NONE;
+        compact := title_is_compact();
 
         // Resolve tint before opening any panels so we read the parent modal's style
         auto_tint := resolve_parent_tint();
 
-        spacer(flex(1), pixels(30));
+        title_gap := 30.0;
+        if compact { title_gap = 20.0; }
 
-        // Outer container: full width, fit height. When the close button is visible,
-        // it gets its own reserved slot so it never overlaps the title banner.
+        spacer(flex(1), pixels(title_gap));
+
+        // Outer container: full width, fit height. The close button is overlaid
+        // so it does not take horizontal space away from the title banner.
         outer := layout_row();
         outer.width = flex(1);
         outer.height = fit();
@@ -3945,15 +3999,23 @@ UIK :: struct {
         if desc.show_exit {
             outer.padding = v4{0, 8, 0, 8};
         }
+        if compact {
+            outer.padding = v4{0, 8, 0, 8};
+        }
         panel_begin(outer);
 
         // Background panel: fills the middle header area, centered text.
         bg := layout_row();
-        bg.width = flex(1);
+        bg.width = flex_fit(1);
         bg.height = fit();
         bg.padding = v4{8, 16, 8, 16};
         bg.main_align = .CENTER;
         bg.cross_align = .CENTER;
+        title_text := text_title();
+        if compact {
+            bg.padding = v4{6, 10, 6, 10};
+            title_text.set_size_mult(0.82);
+        }
         if has_bg {
             bg.background = .BANNER_NORMAL;
             bg.show_background = true;
@@ -3966,7 +4028,7 @@ UIK :: struct {
         panel_begin(bg);
 
         // Title text (centered via MAIN_CENTER on parent)
-        text(desc.title, text_title());
+        text(desc.title, title_text);
 
         // Icon overlay: left edge of bg, full height, aspect-preserved
         if desc.icon != null {
@@ -3982,7 +4044,9 @@ UIK :: struct {
 
         panel_end(); // bg
 
-        // Exit button: separate sibling of the banner, inside the modal bounds.
+        panel_end(); // outer
+
+        // Exit button: overlayed on the right edge, inside the modal bounds.
         if desc.show_exit {
             exit_tex := get_asset(Texture_Asset, "$AO/ui/kit/Icons/misc_icons_2/exit_button_large.png");
 
@@ -3991,22 +4055,28 @@ UIK :: struct {
             btn.axis = .VERTICAL;
             btn.width = pixels(48);
             btn.height = pixels(48);
+            if compact {
+                btn.width = pixels(40);
+                btn.height = pixels(40);
+            }
             btn.cross_align = .CENTER;
             btn.main_align = .CENTER;
             btn.show_background = false;
+            exit_inset := 20.0;
+            // if compact { exit_inset = 6.0; }
+            overlay_begin(.TOP_RIGHT, btn, v2{-exit_inset, -exit_inset}, .START, .START);
             exit_result = panel_begin_interactive("title_area_exit", btn);
             image_fitted(exit_tex, image_desc(.CONTAIN));
             panel_end();
+            overlay_end();
         }
 
-        panel_end(); // outer
-
-        spacer(flex(1), pixels(30));
+        spacer(flex(1), pixels(title_gap));
 
         return exit_result;
     }
 
-    list_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_enabled: bool = true, scroll_flags: s64 = Scroll_Default) {
+    list_begin :: proc(id: string, viewport_desc: Panel_Desc, scroll_enabled: bool = true, scroll_flags: s64 = SCROLL_DEFAULT) {
         if scroll_enabled {
             scroll_area_begin(id, viewport_desc, scroll_flags);
         } else {
