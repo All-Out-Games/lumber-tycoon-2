@@ -24,3 +24,4 @@ res/.preprocessed
 AGENTS.md
 CLAUDE.md
 ao_debug.lock
+res/.upload_cache

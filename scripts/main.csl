@@ -78,6 +78,7 @@ MAX_TREE_LEVEL :: 5;
 TREE_IDLE_ENTITY_SCALE :: 1.470;
 TREE_SPINE_ENTITY_SCALE :: 2.7;
 TREE_IDLE_SPRITE_POSITION_OFFSET :: v2{0.083, 2.182};
+TREE_IDLE_DEPTH_OFFSET :: -0.274;
 INFINITE_BACKPACK_CAPACITY :: 1000000000;
 AUTO_SAWMILL_PRODUCT_ID :: "6a08faac014578603d2d145f";
 UNLIMITED_BACKPACK_PRODUCT_ID :: "6a0b73af8063e5a9ee3400fa";
@@ -99,6 +100,15 @@ FOREST_AXE_TIER_MAX_SLOW_RELIEF :: 0.70;
 PLAYER_DEFAULT_MOVEMENT_SPEED :: 300.0;
 TREE_GRID_DIM :: 16;
 TREE_GRID_CELL_COUNT :: TREE_GRID_DIM * TREE_GRID_DIM;
+ONBOARDING_STEP_CUT_TREES :: 0;
+ONBOARDING_STEP_REFINE_LOGS :: 1;
+ONBOARDING_STEP_SELL_PLANKS :: 2;
+ONBOARDING_STEP_UPGRADE_AXE :: 3;
+ONBOARDING_STEP_DONE :: 4;
+ONBOARDING_FIRST_LOGS_TO_REFINE :: 4;
+ONBOARDING_PLANK_SELL_VALUE :: 12;
+ONBOARDING_TREE_SEARCH_RADIUS :: 32.0;
+ONBOARDING_TREE_SEARCH_INTERVAL :: 0.75;
 
 Tree_Grid_Entry :: struct {
     trees: [..]Lumber_Tree;
@@ -133,6 +143,9 @@ g_observed_forest_cover_score: float;
 g_observed_forest_slowed: bool;
 g_observed_forest_distance_factor: float;
 g_observed_forest_speed_multiplier: float;
+g_observed_tutorial_step: s64;
+g_observed_tutorial_text: string;
+g_observed_tutorial_target_kind: string;
 g_observed_axe_tier_1_hits: s64;
 g_observed_axe_tier_2_hits: s64;
 g_observed_axe_tier_3_hits: s64;
@@ -333,6 +346,12 @@ tree_grid_ensure :: proc() {
     }
 }
 
+tree_spine_depth_offset_for_scale :: proc(scale: v2) -> float {
+    parent_scale := max(abs(scale.x), abs(scale.y));
+    if parent_scale <= 0.001 return TREE_IDLE_DEPTH_OFFSET;
+    return TREE_IDLE_DEPTH_OFFSET * TREE_IDLE_ENTITY_SCALE / parent_scale;
+}
+
 maintain_base_tier_tree_supply :: proc() {
     if !Game.is_server() return;
 
@@ -478,7 +497,8 @@ save_player_progress :: proc(player: Player) {
     Save.set_int(player, "lta_backpack_tier", clamp(player.backpack_tier, 1, MAX_BACKPACK_TIER));
     Save.set_int(player, "lta_sawmill_tier", clamp(player.sawmill_tier, 1, MAX_SAWMILL_TIER));
     Save.set_int(player, "lta_has_sold_planks", bool_to_save_int(player.has_sold_planks));
-    Save.set_int(player, "lta_onboarding_step", clamp(player.onboarding_step, 0, 3));
+    Save.set_int(player, "lta_onboarding_step", clamp(player.onboarding_step, 0, ONBOARDING_STEP_DONE));
+    Save.set_int(player, "lta_tutorial_complete_celebrated", bool_to_save_int(player.tutorial_completion_celebrated));
     Save.set_int(player, "lta_infinite_backpack", bool_to_save_int(player.infinite_backpack));
     Save.set_int(player, "lta_auto_sawmill", bool_to_save_int(player.owns_auto_sawmill));
     Save.set_int(player, "lta_unlimited_backpack", bool_to_save_int(player.owns_unlimited_backpack_product));
@@ -499,7 +519,8 @@ load_player_progress :: proc(player: Player) {
     player.backpack_tier = clamp(Save.get_int(player, "lta_backpack_tier", max(1, player.backpack_tier)), 1, MAX_BACKPACK_TIER);
     player.sawmill_tier = clamp(Save.get_int(player, "lta_sawmill_tier", max(1, player.sawmill_tier)), 1, MAX_SAWMILL_TIER);
     player.has_sold_planks = Save.get_int(player, "lta_has_sold_planks", bool_to_save_int(player.has_sold_planks)) != 0;
-    player.onboarding_step = clamp(Save.get_int(player, "lta_onboarding_step", player.onboarding_step), 0, 3);
+    player.onboarding_step = clamp(Save.get_int(player, "lta_onboarding_step", player.onboarding_step), 0, ONBOARDING_STEP_DONE);
+    player.tutorial_completion_celebrated = Save.get_int(player, "lta_tutorial_complete_celebrated", bool_to_save_int(player.tutorial_completion_celebrated)) != 0;
     player.infinite_backpack = Save.get_int(player, "lta_infinite_backpack", bool_to_save_int(player.infinite_backpack)) != 0;
     player.owns_auto_sawmill = Save.get_int(player, "lta_auto_sawmill", 0) != 0;
     player.owns_unlimited_backpack_product = Save.get_int(player, "lta_unlimited_backpack", 0) != 0;
@@ -1900,18 +1921,178 @@ apply_forest_density_slowdown :: proc(player: Player, dt: float) {
     }
 }
 
-find_goal_position :: proc(player: Player) -> v2 {
-    if !player.has_sold_planks && (count_item(player, plank_defn) > 1 || count_item(player, alien_plank_defn) > 1) return v2{4.6, -2.2};
-    return v2{-4.1, 1.2};
+tutorial_text_for_step :: proc(step: s64) -> string {
+    switch step {
+        case ONBOARDING_STEP_CUT_TREES: return "Walk into the forest to cut trees";
+        case ONBOARDING_STEP_REFINE_LOGS: return "Refine your logs";
+        case ONBOARDING_STEP_SELL_PLANKS: return "Sell your planks";
+        case ONBOARDING_STEP_UPGRADE_AXE: return "Upgrade your axe";
+        default: return "";
+    }
 }
 
-should_draw_goal_arrow :: proc(player: Player) -> bool {
-    logs := count_item(player, log_defn);
+tutorial_target_kind_for_step :: proc(player: Player, step: s64) -> string {
+    switch step {
+        case ONBOARDING_STEP_CUT_TREES: {
+            if player != null && player.tutorial_tree_target != null && #alive(player.tutorial_tree_target.entity) return "tree";
+            return "none";
+        }
+        case ONBOARDING_STEP_REFINE_LOGS: return "refiner";
+        case ONBOARDING_STEP_SELL_PLANKS: return "seller";
+        case ONBOARDING_STEP_UPGRADE_AXE: return "upgrades_ui";
+        default: return "done";
+    }
+}
+
+find_available_spawn_tree :: proc(player: Player) -> Lumber_Tree, bool {
+    if player == null return null, false;
+
+    spawn_pos := v2{0, 0};
+    query_trees_near(spawn_pos, ONBOARDING_TREE_SEARCH_RADIUS, ref player.nearby_tree_cache);
+
+    best: Lumber_Tree;
+    best_d2 := 0.0;
+    found := false;
+    for tree: player.nearby_tree_cache {
+        if tree == null continue;
+        if !#alive(tree.entity) continue;
+        if tree.is_cut || tree.is_falling continue;
+
+        pos := tree_axe_collision_position(tree);
+        d2 := length_squared(pos - spawn_pos);
+        if !found || d2 < best_d2 {
+            best = tree;
+            best_d2 = d2;
+            found = true;
+        }
+    }
+
+    return best, found;
+}
+
+refresh_onboarding_tree_target :: proc(player: Player) {
+    if player == null return;
+
+    needs_target := player.tutorial_tree_target == null;
+    if !needs_target {
+        if !#alive(player.tutorial_tree_target.entity) {
+            needs_target = true;
+        } else if player.tutorial_tree_target.is_cut {
+            needs_target = true;
+        }
+    }
+    if !needs_target return;
+
+    now := get_time();
+    if now < player.tutorial_next_tree_search_at return;
+    player.tutorial_next_tree_search_at = now + ONBOARDING_TREE_SEARCH_INTERVAL;
+
+    tree, found := find_available_spawn_tree(player);
+    if found {
+        player.tutorial_tree_target = tree;
+    } else {
+        player.tutorial_tree_target = null;
+    }
+}
+
+find_closest_sawmill_position :: proc(from_pos: v2) -> v2, bool {
+    best_pos := v2{0, 0};
+    best_d2 := 0.0;
+    found := false;
+    for sawmill: component_iterator(Lumber_Sawmill) {
+        if sawmill == null continue;
+        if !#alive(sawmill.entity) continue;
+        d2 := length_squared(sawmill.entity.world_position - from_pos);
+        if !found || d2 < best_d2 {
+            best_pos = sawmill.entity.world_position;
+            best_d2 = d2;
+            found = true;
+        }
+    }
+    return best_pos, found;
+}
+
+find_closest_seller_position :: proc(from_pos: v2) -> v2, bool {
+    best_pos := v2{0, 0};
+    best_d2 := 0.0;
+    found := false;
+    for seller: component_iterator(Plank_Seller) {
+        if seller == null continue;
+        if !#alive(seller.entity) continue;
+        d2 := length_squared(seller.entity.world_position - from_pos);
+        if !found || d2 < best_d2 {
+            best_pos = seller.entity.world_position;
+            best_d2 = d2;
+            found = true;
+        }
+    }
+    return best_pos, found;
+}
+
+onboarding_logs_needed_to_refine :: proc(player: Player) -> s64 {
+    if player == null return ONBOARDING_FIRST_LOGS_TO_REFINE;
+    if !player.has_sold_planks {
+        return ONBOARDING_FIRST_LOGS_TO_REFINE;
+    }
+
+    remaining_gold := axe_upgrade_cost(1) - Economy.get_balance(player, GOLD_CURRENCY);
+    if remaining_gold <= 0 return 0;
+
+    needed := (remaining_gold + ONBOARDING_PLANK_SELL_VALUE - 1) / ONBOARDING_PLANK_SELL_VALUE;
+    return max(1, needed);
+}
+
+determine_onboarding_step :: proc(player: Player) -> s64 {
+    if player == null return ONBOARDING_STEP_DONE;
+    if player.axe_tier > 1 return ONBOARDING_STEP_DONE;
+    if Economy.get_balance(player, GOLD_CURRENCY) >= axe_upgrade_cost(1) return ONBOARDING_STEP_UPGRADE_AXE;
+
     planks := count_item(player, plank_defn);
     alien_planks := count_item(player, alien_plank_defn);
-    if logs >= effective_backpack_capacity(player) return true;
-    if !player.has_sold_planks && (planks > 1 || alien_planks > 1) return true;
-    return false;
+    if !player.refining && (planks > 0 || alien_planks > 0) return ONBOARDING_STEP_SELL_PLANKS;
+
+    logs := count_item(player, log_defn);
+    if player.refining || logs >= onboarding_logs_needed_to_refine(player) return ONBOARDING_STEP_REFINE_LOGS;
+
+    return ONBOARDING_STEP_CUT_TREES;
+}
+
+tutorial_completion_celebrate :: proc(player: Player) {
+    if player == null return;
+    if player.tutorial_completion_celebrated return;
+
+    player.tutorial_completion_celebrated = true;
+    player.dialogue_text = "Good luck out there, it gets dangerous!";
+    player.dialogue_timer = 4.0;
+    player.ui_pop_timer = 0.35;
+    spawn_float_text_for_player(player, player.entity.world_position + v2{0, 1.75}, "Good luck!", {1.0, 0.86, 0.18, 1}, true);
+    spawn_juice_particles_for_player(player, player.entity.world_position + v2{0, 0.9}, 3, 22, {1.0, 0.82, 0.18, 0.82}, true);
+    play_purchase_item_sfx(player);
+    save_player_progress(player);
+}
+
+update_onboarding_tutorial :: proc(player: Player) {
+    if player == null return;
+
+    previous_step := player.onboarding_step;
+    player.onboarding_step = determine_onboarding_step(player);
+
+    if player.onboarding_step == ONBOARDING_STEP_CUT_TREES {
+        refresh_onboarding_tree_target(player);
+    } else {
+        player.tutorial_tree_target = null;
+    }
+
+    if player.onboarding_step != previous_step {
+        save_player_progress(player);
+    }
+    if player.onboarding_step == ONBOARDING_STEP_DONE {
+        tutorial_completion_celebrate(player);
+    }
+
+    g_observed_tutorial_step = player.onboarding_step;
+    g_observed_tutorial_text = tutorial_text_for_step(player.onboarding_step);
+    g_observed_tutorial_target_kind = tutorial_target_kind_for_step(player, player.onboarding_step);
 }
 
 set_axe_level :: proc(player: Player, level: s64 = MAX_AXE_TIER) {
@@ -1993,6 +2174,9 @@ reset_core_progress_for_rebirth :: proc(player: Player) {
     player.alien_refiner_unlocked = player_has_alien_refiner(player);
     player.has_sold_planks = false;
     player.onboarding_step = 0;
+    player.tutorial_completion_celebrated = false;
+    player.tutorial_tree_target = null;
+    player.tutorial_next_tree_search_at = 0;
     player.refining = false;
     player.polishing = false;
     player.alien_refiner_flame_working = false;
@@ -2074,6 +2258,9 @@ reset :: proc(player: Player) {
     player.alien_refiner_unlocked = false;
     player.has_sold_planks = false;
     player.onboarding_step = 0;
+    player.tutorial_completion_celebrated = false;
+    player.tutorial_tree_target = null;
+    player.tutorial_next_tree_search_at = 0;
     player.refining = false;
     player.polishing = false;
     player.alien_refiner_flame_working = false;
@@ -2261,6 +2448,7 @@ Player :: class : Player_Base {
     last_sell_time: float;
     last_auto_zone_check_at: float;
     has_sold_planks: bool @ao_serialize;
+    tutorial_completion_celebrated: bool @ao_serialize;
     chop_request: s64;
     processed_chop_request: s64;
     forest_brush_feedback_at: float;
@@ -2281,6 +2469,8 @@ Player :: class : Player_Base {
     polishing_processing_loop_active: bool;
     bacteria_tag_flash_until: float;
     nearby_tree_cache: [..]Lumber_Tree;
+    tutorial_tree_target: Lumber_Tree;
+    tutorial_next_tree_search_at: float;
 
     ao_start :: method() {
         if axe_tier <= 0 axe_tier = 1;
@@ -2448,13 +2638,7 @@ Player :: class : Player_Base {
             auto_refine_timer = 0;
         }
 
-        previous_onboarding_step := onboarding_step;
-        if count_item(this, log_defn) > 0 && onboarding_step < 1 onboarding_step = 1;
-        if (count_item(this, plank_defn) > 0 || count_item(this, alien_plank_defn) > 0) && onboarding_step < 2 onboarding_step = 2;
-        if Economy.get_balance(this, GOLD_CURRENCY) > 0 && onboarding_step < 3 onboarding_step = 3;
-        if onboarding_step != previous_onboarding_step {
-            save_player_progress(this);
-        }
+        update_onboarding_tutorial(this);
     }
 
     ao_late_update :: method(dt: float) {
@@ -2562,7 +2746,7 @@ Lumber_Tree :: class : Component {
         if tree_idle_texture != null {
             sprite.set_texture(tree_idle_texture);
         }
-        sprite.depth_offset = -0.274;
+        sprite.depth_offset = TREE_IDLE_DEPTH_OFFSET;
         sprite.layer = 0;
         sprite.scale = v2{1, 1};
         mat := tree_level_material(tree_level);
@@ -2593,6 +2777,7 @@ Lumber_Tree :: class : Component {
         }
         entity.set_local_position(original_pos);
         entity.set_local_scale(original_scale);
+        update_tree_spine_depth_offset();
     }
 
     hide_tree_visuals :: method() {
@@ -2608,6 +2793,11 @@ Lumber_Tree :: class : Component {
         }
         spine_entity = null;
         animator = null;
+    }
+
+    update_tree_spine_depth_offset :: method() {
+        if animator == null return;
+        animator.depth_offset = tree_spine_depth_offset_for_scale(entity.local_scale);
     }
 
     setup_tree_spine :: method() {
@@ -2629,7 +2819,7 @@ Lumber_Tree :: class : Component {
         animator.set_enabled(true);
         animator.awaken();
         animator.set_skeleton(tree_spine_asset);
-        animator.depth_offset = -0.274;
+        update_tree_spine_depth_offset();
         animator.set_skin("default");
         animator.refresh_skins();
         animator.layer = 0;
@@ -2729,6 +2919,7 @@ Lumber_Tree :: class : Component {
                 wobble := sin(fall_age * 58.0) * 2.5;
                 entity.set_local_rotation(wobble);
                 entity.set_local_scale(original_scale * (1.0 + fall_age * 0.35));
+                update_tree_spine_depth_offset();
                 return;
             }
 
@@ -2746,6 +2937,7 @@ Lumber_Tree :: class : Component {
                 entity.set_local_position(original_pos);
                 entity.set_local_rotation(0);
                 entity.set_local_scale(original_scale);
+                update_tree_spine_depth_offset();
                 if animator != null {
                     show_tree_spine();
                     animator.scale = v2{1, 1};
@@ -2767,6 +2959,7 @@ Lumber_Tree :: class : Component {
             entity.set_local_rotation(sin(fall_age * 34.0) * (1.0 - ease) * 2.5);
             entity.set_local_position(original_pos);
             entity.set_local_scale(original_scale * (1.06 - ease * 0.16));
+            update_tree_spine_depth_offset();
 
             if fall_t >= 1.0 && !thumped {
                 thumped = true;
@@ -2812,6 +3005,7 @@ Lumber_Tree :: class : Component {
             } else if animator != null && animator.get_enabled() {
                 entity.set_local_position(original_pos);
                 entity.set_local_scale(original_scale);
+                update_tree_spine_depth_offset();
             }
         }
     }
@@ -4304,10 +4498,12 @@ draw_lumber_topbar :: proc(player: Player) {
     coin_icon := get_asset(Texture_Asset, "$AO/ui/kit/Icons/coin/coin_icon_b.png");
     money_box := UIK.panel_interior(.INSET);
     money_box.width = UIK.flex(1);
-    money_box.height = UIK.pixels(56);
-    money_box.padding = v4{8, 8, 8, 8};
+    money_box.height = UIK.pixels(64);
+    money_box.padding = v4{6, 8, 6, 8};
     UIK.panel_begin(money_box);
-    UIK.currency(coin_icon, Economy.get_balance(player, GOLD_CURRENCY), UIK.text_title());
+    money_text := UIK.text_title();
+    money_text.set_size_mult(0.82);
+    UIK.currency(coin_icon, Economy.get_balance(player, GOLD_CURRENCY), money_text);
     UIK.panel_end();
 
     backpack_full := count_item(player, log_defn) >= effective_backpack_capacity(player);
@@ -4417,27 +4613,115 @@ draw_lumber_world_overlays :: proc(player: Player) {
     draw_vendor_world_labels(player);
     draw_recent_tree_health_bars(player);
 
-    if !should_draw_goal_arrow(player) {
-        draw_world_space_feedback();
-        return;
-    }
-
-    target := find_goal_position(player);
-    options := Tutorial_Arrow.default_options();
-    options.alpha = 0.85;
-    options.far = true;
-    options.near = true;
-    options.bob_scale = 0.5;
-    Tutorial_Arrow.draw(player, target, options);
-
+    target, has_tutorial_target := draw_onboarding_tutorial(player);
     draw_world_space_feedback();
 
-    if player.swing_timer > 0 {
+    if has_tutorial_target && player.swing_timer > 0 {
         dir := normalize(target - player.entity.world_position);
         if length_squared(dir) < 0.1 dir = v2{1, 0};
         start := player.entity.world_position + v2{0, 0.4};
         end := start + dir * (1.1 + player.axe_tier.(float) * 0.18);
         UI.wire_box(end - v2{0.25, 0.25}, end + v2{0.25, 0.25}, 0.06, {1.0, 0.86, 0.22, min(1.0, player.swing_timer * 4.0)});
+    }
+}
+
+draw_tutorial_world_arrow :: proc(player: Player, target: v2) {
+    options := Tutorial_Arrow.default_options();
+    options.alpha = 0.92;
+    options.far = true;
+    options.near = true;
+    options.bob_scale = 0.5;
+    options.bob_bias = 1.35;
+    Tutorial_Arrow.draw(player, target, options);
+}
+
+upgrades_hud_button_hint_rect :: proc() -> Rect {
+    hud := stats_hud_rect();
+    center_y := hud.center().y;
+    return Rect{
+        min=v2{hud.max.x - 214.0, center_y - 35.0},
+        max=v2{hud.max.x - 12.0, center_y + 35.0}
+    };
+}
+
+draw_upgrades_button_tutorial_arrow :: proc() {
+    UI.push_screen_draw_context();
+    defer UI.pop_draw_context();
+
+    button_rect := upgrades_hud_button_hint_rect();
+    pulse := sin(get_time() * 5.5) * 0.5 + 0.5;
+    alpha := lerp(0.55, 1.0, pulse);
+    UI.wire_box(button_rect.min, button_rect.max, 4.0, {1.0, 0.92, 0.18, alpha});
+
+    arrow_center := button_rect.top_center() + v2{0, 84.0 + sin(get_time() * 4.0) * 7.0};
+    arrow_rect := Rect{min=arrow_center - v2{50.0, 50.0}, max=arrow_center + v2{50.0, 50.0}}.fit_aspect(core_globals.tutorial_arrow.get_aspect());
+    UI.push_matrix(Matrix4.rotate_about_point(arrow_rect.center(), 270));
+    UI.quad(arrow_rect, core_globals.tutorial_arrow, {1.0, 1.0, 1.0, alpha});
+    UI.pop_matrix();
+}
+
+draw_onboarding_banner :: proc(text: string) {
+    if text.count <= 0 return;
+
+    UI.push_screen_draw_context();
+    defer UI.pop_draw_context();
+
+    safe := UI.get_safe_screen_rect();
+    half_width := min(390.0, max(265.0, safe.width() * 0.46));
+    center := safe.top_center() + v2{0, -74.0};
+    rect := Rect{min=center - v2{half_width, 36.0}, max=center + v2{half_width, 36.0}};
+    pulse := sin(get_time() * 3.0) * 0.5 + 0.5;
+
+    UI.quad(rect.grow(5.0), core_globals.white_sprite, {0.03, 0.02, 0.0, 0.72});
+    UI.quad(rect, core_globals.white_sprite, {0.26, 0.15, 0.06, 0.91});
+    UI.wire_box(rect.min, rect.max, 3.0, {1.0, lerp(0.72, 0.95, pulse), 0.22, 0.9});
+
+    ts := UI.default_text_settings();
+    ts.size = 32;
+    if safe.width() < 720.0 {
+        ts.size = 27;
+    }
+    ts.color = {1.0, 0.96, 0.82, 1.0};
+    ts.outline_thickness = 2.0;
+    ts.outline_color = {0.05, 0.025, 0.0, 1.0};
+    UI.text(rect.inset(6.0), ts, text);
+}
+
+draw_onboarding_tutorial :: proc(player: Player) -> v2, bool {
+    if player == null return v2{0, 0}, false;
+    if player.onboarding_step >= ONBOARDING_STEP_DONE return v2{0, 0}, false;
+
+    draw_onboarding_banner(tutorial_text_for_step(player.onboarding_step));
+
+    switch player.onboarding_step {
+        case ONBOARDING_STEP_CUT_TREES: {
+            if player.tutorial_tree_target == null return v2{0, 0}, false;
+            if !#alive(player.tutorial_tree_target.entity) return v2{0, 0}, false;
+            if player.tutorial_tree_target.is_cut return v2{0, 0}, false;
+
+            target := tree_axe_collision_position(player.tutorial_tree_target) + v2{0, 0.35};
+            draw_tutorial_world_arrow(player, target);
+            return target, true;
+        }
+        case ONBOARDING_STEP_REFINE_LOGS: {
+            target, found := find_closest_sawmill_position(player.entity.world_position);
+            if !found return v2{0, 0}, false;
+            target += v2{0, 0.45};
+            draw_tutorial_world_arrow(player, target);
+            return target, true;
+        }
+        case ONBOARDING_STEP_SELL_PLANKS: {
+            target, found := find_closest_seller_position(player.entity.world_position);
+            if !found return v2{0, 0}, false;
+            target += v2{0, 0.55};
+            draw_tutorial_world_arrow(player, target);
+            return target, true;
+        }
+        case ONBOARDING_STEP_UPGRADE_AXE: {
+            draw_upgrades_button_tutorial_arrow();
+            return v2{0, 0}, false;
+        }
+        default: return v2{0, 0}, false;
     }
 }
 
@@ -4979,8 +5263,8 @@ draw_upgrades_menu :: proc(player: Player) {
 
     axe_row := UIK.panel_interior(.INSET);
     axe_row.width = UIK.flex(1);
-    axe_row.height = UIK.pixels(106);
-    axe_row.padding = v4{10, 10, 10, 10};
+    axe_row.height = UIK.pixels(126);
+    axe_row.padding = v4{8, 10, 8, 10};
     axe_row.gap = 12;
     UIK.panel_begin(axe_row);
     axe_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
@@ -4997,9 +5281,8 @@ draw_upgrades_menu :: proc(player: Player) {
     UIK.text(format_string("Axe Tier %", {player.axe_tier}), UIK.text_title());
     if player.axe_tier < MAX_AXE_TIER {
         UIK.text(format_string("Damage % -> %", {axe_damage(player.axe_tier), axe_damage(player.axe_tier + 1)}), UIK.text_body());
-        UIK.text(format_string("Tree hits % -> %, reach % -> %", {axe_hits_to_chop(player.axe_tier), axe_hits_to_chop(player.axe_tier + 1), format_float(axe_chop_radius(player.axe_tier), decimals=1), format_float(axe_chop_radius(player.axe_tier + 1), decimals=1)}), UIK.text_body());
     } else {
-        UIK.text(format_string("Damage %, tree hits %, reach %", {axe_damage(player.axe_tier), axe_hits_to_chop(player.axe_tier), format_float(axe_chop_radius(player.axe_tier), decimals=1)}), UIK.text_body());
+        UIK.text(format_string("Damage %", {axe_damage(player.axe_tier)}), UIK.text_body());
         UIK.text("Maximum tier reached", UIK.text_body());
     }
     UIK.panel_end();
@@ -5028,8 +5311,8 @@ draw_upgrades_menu :: proc(player: Player) {
 
     backpack_row := UIK.panel_interior(.INSET);
     backpack_row.width = UIK.flex(1);
-    backpack_row.height = UIK.pixels(104);
-    backpack_row.padding = v4{10, 10, 10, 10};
+    backpack_row.height = UIK.pixels(126);
+    backpack_row.padding = v4{8, 10, 8, 10};
     backpack_row.gap = 12;
     UIK.panel_begin(backpack_row);
     row := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
@@ -5045,11 +5328,11 @@ draw_upgrades_menu :: proc(player: Player) {
     UIK.panel_begin(col);
     UIK.text(format_string("Backpack Tier %", {player.backpack_tier}), UIK.text_title());
     if player.infinite_backpack || player_has_unlimited_backpack(player) {
-        UIK.text("Carrying capacity Infinite", UIK.text_body());
+        UIK.text("Capacity Infinite", UIK.text_body());
     } else if player.backpack_tier < MAX_BACKPACK_TIER {
-        UIK.text(format_string("Carrying capacity % -> %", {backpack_capacity(player.backpack_tier), backpack_capacity(player.backpack_tier + 1)}), UIK.text_body());
+        UIK.text(format_string("Capacity % -> %", {backpack_capacity(player.backpack_tier), backpack_capacity(player.backpack_tier + 1)}), UIK.text_body());
     } else {
-        UIK.text(format_string("Carrying capacity %", {backpack_capacity(player.backpack_tier)}), UIK.text_body());
+        UIK.text(format_string("Capacity %", {backpack_capacity(player.backpack_tier)}), UIK.text_body());
         UIK.text("Maximum tier reached", UIK.text_body());
     }
     UIK.panel_end();
@@ -5078,8 +5361,8 @@ draw_upgrades_menu :: proc(player: Player) {
 
     saw_row := UIK.panel_interior(.INSET);
     saw_row.width = UIK.flex(1);
-    saw_row.height = UIK.pixels(104);
-    saw_row.padding = v4{10, 10, 10, 10};
+    saw_row.height = UIK.pixels(126);
+    saw_row.padding = v4{8, 10, 8, 10};
     saw_row.gap = 12;
     UIK.panel_begin(saw_row);
     saw_layout := UIK.layout_row(UIK.flex(1), UIK.flex(1), 12);
@@ -5095,9 +5378,9 @@ draw_upgrades_menu :: proc(player: Player) {
     UIK.panel_begin(saw_col);
     UIK.text(format_string("Sawmill Tier %", {player.sawmill_tier}), UIK.text_title());
     if player.sawmill_tier < MAX_SAWMILL_TIER {
-        UIK.text(format_string("Processing time % seconds -> % seconds", {format_float(sawmill_process_time(player.sawmill_tier), decimals=2), format_float(sawmill_process_time(player.sawmill_tier + 1), decimals=2)}), UIK.text_body());
+        UIK.text(format_string("Time % sec -> % sec", {format_float(sawmill_process_time(player.sawmill_tier), decimals=2), format_float(sawmill_process_time(player.sawmill_tier + 1), decimals=2)}), UIK.text_body());
     } else {
-        UIK.text(format_string("Processing time % seconds", {format_float(sawmill_process_time(player.sawmill_tier), decimals=2)}), UIK.text_body());
+        UIK.text(format_string("Time % sec", {format_float(sawmill_process_time(player.sawmill_tier), decimals=2)}), UIK.text_body());
         UIK.text("Maximum tier reached", UIK.text_body());
     }
     UIK.panel_end();

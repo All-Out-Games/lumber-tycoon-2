@@ -172,6 +172,8 @@ Navmesh :: class : Component {
     try_raycast :: method(position: v2, direction: v2) -> v2, bool #foreign "navmesh_try_raycast";
     rebuild_immediately :: method() -> bool #foreign "navmesh_rebuild_immediately";
     mark_for_rebuild :: method() #foreign "navmesh_mark_for_rebuild";
+    child_colliders_only: bool #foreign;
+    enable_automatic_rebuilds: bool #foreign;
 } #foreign_struct "Navmesh"
 
 Navmesh_Loop :: class : Component {
@@ -1347,39 +1349,39 @@ Rect :: struct {
     max: v2;
 
     subrect :: method(x_min: float, y_min: float, x_max: float, y_max: float) -> Rect #foreign "rect_subrect";
-    subrect :: method(x_min: float, y_min: float, x_max: float, y_max: float, t: float, r: float, b: float, l: float) -> Rect #foreign "rect_subrect_inset";
+    subrect :: method(x_min: float, y_min: float, x_max: float, y_max: float, pt_t: float, pt_r: float, pt_b: float, pt_l: float) -> Rect #foreign "rect_subrect_inset";
 
-    offset       :: method(x: float, y: float)                     -> Rect #foreign "rect_offset";
-    inset        :: method(t: float, r: float, b: float, l: float) -> Rect #foreign "rect_inset";
-    inset_top    :: method(v: float)                               -> Rect #foreign "rect_inset_top";
-    inset_right  :: method(v: float)                               -> Rect #foreign "rect_inset_right";
-    inset_bottom :: method(v: float)                               -> Rect #foreign "rect_inset_bottom";
-    inset_left   :: method(v: float)                               -> Rect #foreign "rect_inset_left";
-    grow         :: method(t: float, r: float, b: float, l: float) -> Rect #foreign "rect_grow";
-    grow_top     :: method(v: float)                               -> Rect #foreign "rect_grow_top";
-    grow_right   :: method(v: float)                               -> Rect #foreign "rect_grow_right";
-    grow_bottom  :: method(v: float)                               -> Rect #foreign "rect_grow_bottom";
-    grow_left    :: method(v: float)                               -> Rect #foreign "rect_grow_left";
-    cut_top      :: method(amount: float)                          -> Rect #foreign "rect_cut_top";
-    cut_right    :: method(amount: float)                          -> Rect #foreign "rect_cut_right";
-    cut_bottom   :: method(amount: float)                          -> Rect #foreign "rect_cut_bottom";
-    cut_left     :: method(amount: float)                          -> Rect #foreign "rect_cut_left";
+    offset       :: method(points_x: float, points_y: float)                                   -> Rect #foreign "rect_offset";
+    inset        :: method(points_t: float, points_r: float, points_b: float, points_l: float) -> Rect #foreign "rect_inset";
+    inset_top    :: method(points: float)                                                      -> Rect #foreign "rect_inset_top";
+    inset_right  :: method(points: float)                                                      -> Rect #foreign "rect_inset_right";
+    inset_bottom :: method(points: float)                                                      -> Rect #foreign "rect_inset_bottom";
+    inset_left   :: method(points: float)                                                      -> Rect #foreign "rect_inset_left";
+    grow         :: method(points_t: float, points_r: float, points_b: float, points_l: float) -> Rect #foreign "rect_grow";
+    grow_top     :: method(points: float)                                                      -> Rect #foreign "rect_grow_top";
+    grow_right   :: method(points: float)                                                      -> Rect #foreign "rect_grow_right";
+    grow_bottom  :: method(points: float)                                                      -> Rect #foreign "rect_grow_bottom";
+    grow_left    :: method(points: float)                                                      -> Rect #foreign "rect_grow_left";
+    cut_top      :: method(points: float)                                                      -> Rect #foreign "rect_cut_top";
+    cut_right    :: method(points: float)                                                      -> Rect #foreign "rect_cut_right";
+    cut_bottom   :: method(points: float)                                                      -> Rect #foreign "rect_cut_bottom";
+    cut_left     :: method(points: float)                                                      -> Rect #foreign "rect_cut_left";
 
-    offset_unscaled       :: method(x: float, y: float)                     -> Rect #foreign "rect_offset_unscaled";
-    inset_unscaled        :: method(t: float, r: float, b: float, l: float) -> Rect #foreign "rect_inset_unscaled";
-    inset_top_unscaled    :: method(v: float)                               -> Rect #foreign "rect_inset_top_unscaled";
-    inset_right_unscaled  :: method(v: float)                               -> Rect #foreign "rect_inset_right_unscaled";
-    inset_bottom_unscaled :: method(v: float)                               -> Rect #foreign "rect_inset_bottom_unscaled";
-    inset_left_unscaled   :: method(v: float)                               -> Rect #foreign "rect_inset_left_unscaled";
-    grow_unscaled         :: method(t: float, r: float, b: float, l: float) -> Rect #foreign "rect_grow_unscaled";
-    grow_top_unscaled     :: method(v: float)                               -> Rect #foreign "rect_grow_top_unscaled";
-    grow_right_unscaled   :: method(v: float)                               -> Rect #foreign "rect_grow_right_unscaled";
-    grow_bottom_unscaled  :: method(v: float)                               -> Rect #foreign "rect_grow_bottom_unscaled";
-    grow_left_unscaled    :: method(v: float)                               -> Rect #foreign "rect_grow_left_unscaled";
-    cut_top_unscaled      :: method(amount: float)                          -> Rect #foreign "rect_cut_top_unscaled";
-    cut_right_unscaled    :: method(amount: float)                          -> Rect #foreign "rect_cut_right_unscaled";
-    cut_bottom_unscaled   :: method(amount: float)                          -> Rect #foreign "rect_cut_bottom_unscaled";
-    cut_left_unscaled     :: method(amount: float)                          -> Rect #foreign "rect_cut_left_unscaled";
+    offset_unscaled       :: method(pixels_x: float, pixels_y: float)                                   -> Rect #foreign "rect_offset_unscaled";
+    inset_unscaled        :: method(pixels_t: float, pixels_r: float, pixels_b: float, pixels_l: float) -> Rect #foreign "rect_inset_unscaled";
+    inset_top_unscaled    :: method(pixels: float)                                                      -> Rect #foreign "rect_inset_top_unscaled";
+    inset_right_unscaled  :: method(pixels: float)                                                      -> Rect #foreign "rect_inset_right_unscaled";
+    inset_bottom_unscaled :: method(pixels: float)                                                      -> Rect #foreign "rect_inset_bottom_unscaled";
+    inset_left_unscaled   :: method(pixels: float)                                                      -> Rect #foreign "rect_inset_left_unscaled";
+    grow_unscaled         :: method(pixels_t: float, pixels_r: float, pixels_b: float, pixels_l: float) -> Rect #foreign "rect_grow_unscaled";
+    grow_top_unscaled     :: method(pixels: float)                                                      -> Rect #foreign "rect_grow_top_unscaled";
+    grow_right_unscaled   :: method(pixels: float)                                                      -> Rect #foreign "rect_grow_right_unscaled";
+    grow_bottom_unscaled  :: method(pixels: float)                                                      -> Rect #foreign "rect_grow_bottom_unscaled";
+    grow_left_unscaled    :: method(pixels: float)                                                      -> Rect #foreign "rect_grow_left_unscaled";
+    cut_top_unscaled      :: method(pixels: float)                                                      -> Rect #foreign "rect_cut_top_unscaled";
+    cut_right_unscaled    :: method(pixels: float)                                                      -> Rect #foreign "rect_cut_right_unscaled";
+    cut_bottom_unscaled   :: method(pixels: float)                                                      -> Rect #foreign "rect_cut_bottom_unscaled";
+    cut_left_unscaled     :: method(pixels: float)                                                      -> Rect #foreign "rect_cut_left_unscaled";
 
     scale :: method(x: float, y: float) -> Rect #foreign "rect_scale";
     slide :: method(x: float, y: float) -> Rect #foreign "rect_slide";

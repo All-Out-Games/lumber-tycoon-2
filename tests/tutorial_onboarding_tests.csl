@@ -1,0 +1,46 @@
+test_tutorial_initial_points_to_spawn_tree :: proc() {
+    Test.run_admin_command("reset");
+    Test.teleport({0, 0});
+    Test.wait_seconds(1.2);
+
+    Test.assert_var_int("tutorial starts by cutting trees", "g_observed_tutorial_step", 0);
+    Test.assert_var_str("tutorial cut tree text", "g_observed_tutorial_text", "Walk into the forest to cut trees");
+    Test.assert_var_str("tutorial points at available tree", "g_observed_tutorial_target_kind", "tree");
+    Test.screenshot("tutorial_initial_tree");
+}
+
+test_tutorial_points_at_upgrade_ui_and_finishes_after_axe_upgrade :: proc() {
+    Test.run_admin_command("reset");
+    Test.teleport({0, 0});
+    Test.wait_seconds(0.8);
+
+    Test.run_admin_command("set_coins 43");
+    Test.wait_seconds(1.2);
+
+    Test.assert_var_int("tutorial points to upgrade button", "g_observed_tutorial_step", 3);
+    Test.assert_var_str("tutorial upgrade text", "g_observed_tutorial_text", "Upgrade your axe");
+    Test.assert_var_str("tutorial target is upgrades ui", "g_observed_tutorial_target_kind", "upgrades_ui");
+    Test.screenshot("tutorial_upgrade_button");
+
+    Test.click_button("open_sawmill_upgrades");
+    Test.wait_seconds(0.5);
+    Test.click_button("axe_upgrade_buy_menu");
+    Test.wait_seconds(1.2);
+
+    Test.assert_var_int("axe upgraded", "g_observed_axe_tier", 2);
+    Test.assert_var_int("tutorial done after axe upgrade", "g_observed_tutorial_step", 4);
+}
+
+test_upgrades_menu_text_fits_rows :: proc() {
+    Test.run_admin_command("reset");
+    Test.teleport({0, 0});
+    Test.wait_seconds(0.8);
+
+    Test.run_admin_command("set_coins 43");
+    Test.wait_seconds(0.8);
+    Test.click_button("open_sawmill_upgrades");
+    Test.wait_seconds(0.8);
+
+    Test.assert_var_bool("upgrades menu open", "g_observed_show_upgrades_menu", true);
+    Test.screenshot("upgrades_menu_text_rows");
+}
