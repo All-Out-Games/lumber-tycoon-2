@@ -463,7 +463,7 @@ player_has_auto_sawmill :: proc(player: Player) -> bool {
 }
 
 player_has_unlimited_backpack :: proc(player: Player) -> bool {
-    if player == null return false;
+    if player == null || !#alive(player) return false;
     return player.owns_unlimited_backpack_product;
 }
 
@@ -677,8 +677,8 @@ backpack_capacity :: proc(tier: s64) -> s64 {
 
 effective_backpack_capacity :: proc(player: Player) -> s64 {
     if player_has_unlimited_backpack(player) return INFINITE_BACKPACK_CAPACITY;
-    if player != null && player.infinite_backpack return INFINITE_BACKPACK_CAPACITY;
-    if player == null return backpack_capacity(1);
+    if player != null && #alive(player) && player.infinite_backpack return INFINITE_BACKPACK_CAPACITY;
+    if player == null || !#alive(player) return backpack_capacity(1);
     return backpack_capacity(player.backpack_tier);
 }
 
@@ -690,7 +690,7 @@ backpack_upgrade_cost :: proc(tier: s64) -> s64 {
 }
 
 give_logs_to_backpack :: proc(player: Player, amount: s64) -> s64 {
-    if player == null || amount <= 0 return 0;
+    if player == null || !#alive(player) || amount <= 0 return 0;
     carried := count_item(player, log_defn);
     room := effective_backpack_capacity(player) - carried;
     if room <= 0 return 0;
@@ -3045,19 +3045,20 @@ Tree_Level_Ring :: class : Component {
 
 spawn_log_pickup :: proc(pos: v2, player: Player, amount: s64, tier: s64) {
     moved: s64 = 0;
-    if player != null {
-        moved = give_logs_to_backpack(player, amount);
-        if moved > 0 {
-            player.ui_pop_timer = 0.18;
-        } else {
-            spawn_float_text_for_player(player, player.entity.world_position + v2{0, 1.55}, "Backpack full", {1.0, 0.12, 0.08, 1}, true);
-            if player_local_feedback(player) {
-                play_backpack_full_dud_sfx(player.entity.world_position);
-            }
-            return;
+    if player == null || !#alive(player) || !#alive(player.entity) return;
+
+    moved = give_logs_to_backpack(player, amount);
+    if moved > 0 {
+        player.ui_pop_timer = 0.18;
+    } else {
+        feedback_pos := player.entity.world_position;
+        spawn_float_text_for_player(player, feedback_pos + v2{0, 1.55}, "Backpack full", {1.0, 0.12, 0.08, 1}, true);
+        if player_local_feedback(player) {
+            play_backpack_full_dud_sfx(feedback_pos);
         }
+        return;
     }
-    if player == null return;
+
     if g_log_pickup_lerps.count >= 40 {
         g_log_pickup_lerps.unordered_remove_by_index(0);
     }
@@ -3126,6 +3127,7 @@ Floating_Feedback :: struct {
     text: string;
     color: v4;
     age: float;
+    prev_age: float;
     duration: float;
     drift_x: float;
     big: bool;
@@ -3209,6 +3211,7 @@ update_world_space_feedback :: proc(dt: float) {
     i = g_floating_feedback.count - 1;
     while i >= 0 {
         f := g_floating_feedback[i];
+        f.prev_age = f.age;
         f.age += dt;
         if f.age >= f.duration {
             g_floating_feedback.unordered_remove_by_index(i);
@@ -4614,7 +4617,7 @@ draw_lumber_world_overlays :: proc(player: Player) {
     draw_recent_tree_health_bars(player);
 
     target, has_tutorial_target := draw_onboarding_tutorial(player);
-    draw_world_space_feedback();
+    draw_world_space_feedback(player.camera);
 
     if has_tutorial_target && player.swing_timer > 0 {
         dir := normalize(target - player.entity.world_position);
@@ -5081,7 +5084,7 @@ spawn_text_world_scaled :: proc(pos: v2, text: string, color: v4, scale: float) 
     UI.text(rect, ts, text);
 }
 
-draw_floating_feedback :: proc(f: Floating_Feedback) {
+draw_floating_feedback :: proc(f: Floating_Feedback, camera: Camera) {
     t := min(1.0, f.age / f.duration);
     pos := f.start_pos + v2{f.drift_x * t, t * 1.2 + sin(t * PI) * 0.4};
     screen := world_to_screen(pos);
@@ -5096,7 +5099,15 @@ draw_floating_feedback :: proc(f: Floating_Feedback) {
     ts.outline_color = {0, 0, 0, ts.color.w};
     ts.halign = .CENTER;
     ts.valign = .CENTER;
+    // The text position only advances at sim rate; hand the renderer this frame's
+    // screen-space movement (text motion + camera motion) so it can interpolate
+    // between sim frames instead of stepping at 32hz.
+    prev_t := min(1.0, f.prev_age / f.duration);
+    prev_pos := f.start_pos + v2{f.drift_x * prev_t, prev_t * 1.2 + sin(prev_t * PI) * 0.4};
+    camera_delta := camera.position - camera.position_last_frame;
+    UI.push_interpolation_offset(screen - world_to_screen(prev_pos + camera_delta));
     UI.text(rect, ts, f.text);
+    UI.pop_interpolation_offset();
 }
 
 draw_world_ui_quad :: proc(pos: v2, texture: Texture_Asset, size: float, rotation: float, color: v4) {
@@ -5108,7 +5119,7 @@ draw_world_ui_quad :: proc(pos: v2, texture: Texture_Asset, size: float, rotatio
     UI.pop_matrix();
 }
 
-draw_world_space_feedback :: proc() {
+draw_world_space_feedback :: proc(camera: Camera) {
     frame := get_frame_number();
     if g_world_feedback_draw_frame == frame return;
     g_world_feedback_draw_frame = frame;
@@ -5152,7 +5163,7 @@ draw_world_space_feedback :: proc() {
         for i: 0..g_floating_feedback.count - 1 {
             f := g_floating_feedback[i];
             if !should_draw_feedback_owner(f.owner) continue;
-            draw_floating_feedback(f);
+            draw_floating_feedback(f, camera);
         }
     }
 }
@@ -5579,4 +5590,3 @@ draw_upgrades_menu :: proc(player: Player) {
         Purchasing.prompt_purchase(player, UNLIMITED_MOVE_SPEED_PRODUCT_ID);
     }
 }
-
