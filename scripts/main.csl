@@ -1,9 +1,11 @@
 import "core:ao"
+import "core:global_leaderboard"
 
 LOG_ITEM_ID :: "log";
 PLANK_ITEM_ID :: "plank";
 ALIEN_PLANK_ITEM_ID :: "alien_plank";
 GOLD_CURRENCY :: "Gold";
+GOLD_LEADERBOARD_ID :: "lta_gold_earned";
 GLOBAL_TOP_MESSAGE_SAVE_KEY :: "lta_global_top_message";
 SAVE_PROGRESS_VERSION :: 1;
 BACKPACK_UPGRADE_SFX :: "ui_backpack_f93299.wav";
@@ -169,6 +171,7 @@ g_observed_tree_monster_unlocked: bool;
 g_observed_haunts_forest: bool;
 g_observed_bacteria_takeover_active: bool;
 g_last_sell_payout: s64;
+g_observed_gold_leaderboard_last_award: s64;
 g_game_start_music_active: bool;
 g_game_start_music_sound_id: u64;
 tree_spine_asset: Spine_Asset;
@@ -235,6 +238,7 @@ ao_before_scene_load :: proc() {
 
 ao_start :: proc() {
     tree_grid_mark_dirty();
+    g_observed_gold_leaderboard_last_award = 0;
 }
 
 ao_update :: proc(dt: float) {
@@ -405,6 +409,12 @@ query_trees_near :: proc(pos: v2, radius: float, results: ref [..]Lumber_Tree) {
 bool_to_save_int :: proc(value: bool) -> s64 {
     if value return 1;
     return 0;
+}
+
+award_gold_leaderboard :: proc(player: Player, amount: s64) {
+    if player == null || amount <= 0 return;
+    g_observed_gold_leaderboard_last_award = amount;
+    Global_Leaderboard.increment_score(player, GOLD_LEADERBOARD_ID, amount.(f64));
 }
 
 rebirth_cost :: proc(level: s64) -> s64 {
@@ -1745,6 +1755,7 @@ sell_planks_at_seller :: proc(player: Player, seller_pos: v2) -> bool {
     payout := apply_rebirth_money_multiplier(player, base_payout);
     g_last_sell_payout = payout;
     Economy.deposit_currency(player, GOLD_CURRENCY, payout);
+    award_gold_leaderboard(player, payout);
     player.has_sold_planks = true;
     save_player_progress(player);
     spawn_float_text_scaled_feedback_for_player(player, player.entity.world_position + v2{0, 1.5}, format_string("+% gold", {payout}), {0.35, 1.0, 0.25, 1}, true, 2.5);
@@ -2148,6 +2159,7 @@ give_coins :: proc(player: Player, amount: s64 = 1000) {
     if player == null return;
     if amount <= 0 return;
     Economy.deposit_currency(player, GOLD_CURRENCY, amount);
+    award_gold_leaderboard(player, amount);
     player.dialogue_text = format_string("+% gold", {amount});
     player.dialogue_timer = 1.5;
     spawn_float_text(player.entity.world_position + v2{0, 1.5}, format_string("+% gold", {amount}), {1.0, 0.86, 0.18, 1}, true);
@@ -3413,6 +3425,7 @@ Coin_Chest :: class : Interactable {
         base_payout := rng_range_int(ref rng, min_gold, max_gold).(s64);
         payout := apply_rebirth_money_multiplier(player, base_payout);
         Economy.deposit_currency(player, GOLD_CURRENCY, payout);
+        award_gold_leaderboard(player, payout);
         spawn_float_text(entity.world_position + v2{0, 1.2}, format_string("+% gold", {payout}), {1.0, 0.86, 0.18, 1}, true);
         spawn_juice_particles(entity.world_position + v2{0, 0.35}, 4, 18, {1.0, 0.82, 0.18, 0.85}, true);
         play_coin_chest_sfx(entity.world_position);

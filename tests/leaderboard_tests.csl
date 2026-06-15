@@ -1,0 +1,12 @@
+test_gold_leaderboard_exists_and_is_configured :: proc() {
+    Test.assert_entity_exists("leaderboard entity exists", "Gold_Leaderboard");
+    Test.assert_component_str("leaderboard id configured", "Gold_Leaderboard", "Global_Leaderboard.leaderboard_id", "lta_gold_earned");
+    Test.assert_component_str("leaderboard title configured", "Gold_Leaderboard", "Global_Leaderboard.optional_title", "Gold Earned");
+}
+
+test_gold_leaderboard_tracks_gold_awards :: proc() {
+    Test.assert_var_int("leaderboard award starts empty", "g_observed_gold_leaderboard_last_award", 0);
+    Test.run_admin_command("give_coins 77");
+    Test.wait_seconds(0.75);
+    Test.assert_var_int("leaderboard award records last payout", "g_observed_gold_leaderboard_last_award", 77);
+}
