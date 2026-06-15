@@ -947,6 +947,7 @@ spawn_chip_for_player :: proc(owner: Player, pos: v2, tier: s64) {
         c: Chip_VFX;
         c.owner = owner;
         c.pos = pos;
+        c.prev_pos = c.pos;
         rng := rng_root_seed() + get_frame_number() + g_chip_vfx.count.(u64) + i.(u64);
         c.velocity = v2{rng_range_float(ref rng, -2.4, 2.4), rng_range_float(ref rng, 1.2, 3.3)};
         c.spin = rng_range_float(ref rng, -280.0, 280.0);
@@ -969,6 +970,7 @@ spawn_juice_particles_for_player :: proc(owner: Player, pos: v2, tier: s64, coun
         j.owner = owner;
         rng := rng_root_seed() + get_frame_number() + g_juice_particle_vfx.count.(u64) + i.(u64);
         j.pos = pos + v2{rng_range_float(ref rng, -0.28, 0.28), rng_range_float(ref rng, -0.12, 0.25)};
+        j.prev_pos = j.pos;
         j.velocity = v2{rng_range_float(ref rng, -1.8, 1.8), rng_range_float(ref rng, 0.35, 2.6)};
         j.spin = rng_range_float(ref rng, -220.0, 220.0);
         j.duration = rng_range_float(ref rng, 0.45, 0.95);
@@ -3067,6 +3069,7 @@ spawn_log_pickup :: proc(pos: v2, player: Player, amount: s64, tier: s64) {
     p.delay = 0.38;
     p.duration = max(0.22, 0.62 - tier.(float) * 0.045);
     p.start_pos = pos + v2{0, 0.15};
+    p.prev_age = p.age;
     p.base_scale = 0.55 + tier.(float) * 0.03;
     p.amount = 0;
     p.display_amount = moved;
@@ -3076,6 +3079,7 @@ spawn_log_pickup :: proc(pos: v2, player: Player, amount: s64, tier: s64) {
 Log_Pickup_Lerp :: struct {
     owner: Player;
     age: float;
+    prev_age: float;
     delay: float;
     duration: float;
     start_pos: v2;
@@ -3085,22 +3089,27 @@ Log_Pickup_Lerp :: struct {
     base_scale: float;
 }
 
-log_pickup_lerp_position :: proc(p: Log_Pickup_Lerp) -> v2 {
-    if p.owner == null || !#alive(p.owner) || !#alive(p.owner.entity) return p.start_pos;
-    if p.age < p.delay {
-        bob := sin(p.age * 14.0) * 0.12;
+log_pickup_lerp_position_at_age :: proc(p: Log_Pickup_Lerp, age: float, owner_pos: v2) -> v2 {
+    if age < p.delay {
+        bob := sin(age * 14.0) * 0.12;
         return p.start_pos + v2{0, bob};
     }
-    t := min(1.0, (p.age - p.delay) / p.duration);
+    t := min(1.0, (age - p.delay) / p.duration);
     ease := t * t * (3.0 - 2.0 * t);
-    target := p.owner.entity.world_position + v2{0, 0.75};
+    target := owner_pos + v2{0, 0.75};
     arc := sin(t * PI) * 1.1;
     return p.start_pos + (target - p.start_pos) * ease + v2{0, arc};
+}
+
+log_pickup_lerp_position :: proc(p: Log_Pickup_Lerp) -> v2 {
+    if p.owner == null || !#alive(p.owner) || !#alive(p.owner.entity) return p.start_pos;
+    return log_pickup_lerp_position_at_age(p, p.age, p.owner.entity.world_position);
 }
 
 Chip_VFX :: struct {
     owner: Player;
     pos: v2;
+    prev_pos: v2;
     velocity: v2;
     age: float;
     duration: float;
@@ -3112,6 +3121,7 @@ Chip_VFX :: struct {
 Juice_Particle_VFX :: struct {
     owner: Player;
     pos: v2;
+    prev_pos: v2;
     velocity: v2;
     age: float;
     duration: float;
@@ -3139,6 +3149,7 @@ update_world_space_feedback :: proc(dt: float) {
     i: int = g_log_pickup_lerps.count - 1;
     while i >= 0 {
         p := g_log_pickup_lerps[i];
+        p.prev_age = p.age;
         p.age += dt;
         if p.owner == null || !#alive(p.owner) || !#alive(p.owner.entity) {
             g_log_pickup_lerps.unordered_remove_by_index(i);
@@ -3179,6 +3190,7 @@ update_world_space_feedback :: proc(dt: float) {
     i = g_chip_vfx.count - 1;
     while i >= 0 {
         c := g_chip_vfx[i];
+        c.prev_pos = c.pos;
         c.age += dt;
         c.velocity.y -= 5.0 * dt;
         c.pos += c.velocity * dt;
@@ -3195,6 +3207,7 @@ update_world_space_feedback :: proc(dt: float) {
     i = g_juice_particle_vfx.count - 1;
     while i >= 0 {
         j := g_juice_particle_vfx[i];
+        j.prev_pos = j.pos;
         j.age += dt;
         j.velocity.y -= j.gravity * dt;
         j.pos += j.velocity * dt;
@@ -4607,6 +4620,36 @@ draw_global_top_message :: proc(player: Player) {
     UIK.end();
 }
 
+world_screen_interpolation_offset :: proc(camera: Camera, current_world: v2, previous_world: v2) -> v2 {
+    camera_delta := camera.position - camera.position_last_frame;
+    return world_to_screen(current_world) - world_to_screen(previous_world + camera_delta);
+}
+
+entity_previous_world_pos :: proc(anchor: Entity, current_world: v2) -> v2 {
+    if anchor == null || !#alive(anchor) return current_world;
+    return current_world - anchor.calculate_interpolation_offset();
+}
+
+draw_entity_world_progress_bar :: proc(anchor: Entity, position: v2, progress: float, options: World_Progress_Bar.World_Progress_Bar_Options) {
+    if anchor == null || !#alive(anchor) return;
+
+    UI.begin_world_space_ui(anchor);
+    defer UI.end_world_space_ui();
+
+    UI.push_z(position.y);
+    defer UI.pop_z();
+
+    hw := options.width * 0.5 * options.scale;
+    hh := options.height * 0.5 * options.scale;
+    position.y += options.y_bias;
+    bg_rect := Rect{position, position}.grow(hh, hw, hh, hw);
+    fill_rect := bg_rect.inset(0.02).subrect(0, 0, progress, 1);
+
+    UI.quad(bg_rect, core_globals.white_sprite, {0.0, 0.0, 0.0, 1});
+    fill_color := lerp(v4{1, 0.1, 0.1, 1}, {0.1, 1, 0.1, 1}, progress);
+    UI.quad(fill_rect, core_globals.white_sprite, fill_color);
+}
+
 draw_lumber_world_overlays :: proc(player: Player) {
     if !player_ready_for_ui(player) return;
     draw_sawmill_progress_bar(player);
@@ -4624,7 +4667,9 @@ draw_lumber_world_overlays :: proc(player: Player) {
         if length_squared(dir) < 0.1 dir = v2{1, 0};
         start := player.entity.world_position + v2{0, 0.4};
         end := start + dir * (1.1 + player.axe_tier.(float) * 0.18);
+        UI.begin_world_space_ui(player.entity);
         UI.wire_box(end - v2{0.25, 0.25}, end + v2{0.25, 0.25}, 0.06, {1.0, 0.86, 0.22, min(1.0, player.swing_timer * 4.0)});
+        UI.end_world_space_ui();
     }
 }
 
@@ -4745,13 +4790,15 @@ draw_recent_tree_health_bars :: proc(player: Player) {
 
         tree_health := max(1, tree.max_health());
         progress := clamp(tree.health.(float) / tree_health.(float), 0.0, 1.0);
-        bar_pos := world_to_screen(tree.entity.world_position + v2{0, 1.65});
+        bar_world := tree.entity.world_position + v2{0, 1.65};
+        bar_pos := world_to_screen(bar_world);
         width := 76.0 + tree.tree_level.(float) * 8.0;
         height := 10.0;
         half := v2{width * 0.5, height * 0.5};
         bg_rect := Rect{min=bar_pos - half, max=bar_pos + half};
         fill_width := max(2.0, width * progress);
         fill_rect := Rect{min=bg_rect.min + v2{2, 2}, max=bg_rect.min + v2{fill_width - 2.0, height - 2.0}};
+        UI.push_interpolation_offset(world_screen_interpolation_offset(player.camera, bar_world, entity_previous_world_pos(tree.entity, bar_world)));
         UI.quad(bg_rect.grow(3), core_globals.white_sprite, {0.04, 0.02, 0.0, 0.74});
         if now < tree.health_bar_flash_until {
             UI.quad(bg_rect, core_globals.white_sprite, {1.0, 1.0, 1.0, 0.96});
@@ -4760,6 +4807,7 @@ draw_recent_tree_health_bars :: proc(player: Player) {
             UI.quad(bg_rect, core_globals.white_sprite, {0.22, 0.05, 0.02, 0.92});
             UI.quad(fill_rect, core_globals.white_sprite, {0.28, 1.0, 0.24, 0.96});
         }
+        UI.pop_interpolation_offset();
     }
 }
 
@@ -4767,9 +4815,9 @@ draw_helicopter_fuel_bars :: proc(player: Player) {
     for heli: component_iterator(Rentable_Helicopter) {
         if !heli.is_rented() {
             if !player_can_use_helicopter(player) {
-                spawn_text_world_scaled(heli.entity.world_position + v2{0, 1.6}, "Requires rebirth 2", {1.0, 0.55, 0.25, 1}, 0.92);
+                draw_entity_text_world_scaled(player.camera, heli.entity, v2{0, 1.6}, "Requires rebirth 2", {1.0, 0.55, 0.25, 1}, 0.92);
             } else {
-                spawn_text_world_scaled(heli.entity.world_position + v2{0, 1.6}, format_string("Rent %", {heli.rent_cost}), {1.0, 0.90, 0.25, 1}, 1.15);
+                draw_entity_text_world_scaled(player.camera, heli.entity, v2{0, 1.6}, format_string("Rent %", {heli.rent_cost}), {1.0, 0.90, 0.25, 1}, 1.15);
             }
             continue;
         }
@@ -4780,11 +4828,11 @@ draw_helicopter_fuel_bars :: proc(player: Player) {
         options.width = 1.85;
         options.height = 0.18;
         options.scale = 1.0;
-        World_Progress_Bar.draw(heli.entity.world_position + v2{0, 1.75}, progress, options);
+        draw_entity_world_progress_bar(heli.entity, heli.entity.world_position + v2{0, 1.75}, progress, options);
         remaining := max(0, (heli.rented_until - get_time()).(s64));
         minutes := remaining / 60;
         seconds := remaining - minutes * 60;
-        spawn_text_world_scaled(heli.entity.world_position + v2{0, 2.05}, format_string("Fuel %:%", {minutes, format_int(seconds, leading_zeroes=2)}), {0.9, 1.0, 0.32, 1}, 0.95);
+        draw_entity_text_world_scaled(player.camera, heli.entity, v2{0, 2.05}, format_string("Fuel %:%", {minutes, format_int(seconds, leading_zeroes=2)}), {0.9, 1.0, 0.32, 1}, 0.95);
     }
 }
 
@@ -4792,9 +4840,9 @@ draw_tree_monster_timer_bars :: proc(player: Player) {
     for monster: component_iterator(Rentable_Tree_Monster) {
         if !monster.is_rented() {
             if !player_can_use_tree_monster(player) {
-                spawn_text_world_scaled(monster.entity.world_position + v2{0, 1.75}, "Requires rebirth 3", {1.0, 0.55, 0.25, 1}, 0.92);
+                draw_entity_text_world_scaled(player.camera, monster.entity, v2{0, 1.75}, "Requires rebirth 3", {1.0, 0.55, 0.25, 1}, 0.92);
             } else {
-                spawn_text_world_scaled(monster.entity.world_position + v2{0, 1.75}, format_string("Rent %", {monster.rent_cost}), {0.55, 1.0, 0.32, 1}, 1.12);
+                draw_entity_text_world_scaled(player.camera, monster.entity, v2{0, 1.75}, format_string("Rent %", {monster.rent_cost}), {0.55, 1.0, 0.32, 1}, 1.12);
             }
             continue;
         }
@@ -4805,9 +4853,9 @@ draw_tree_monster_timer_bars :: proc(player: Player) {
         options.width = 1.85;
         options.height = 0.18;
         options.scale = 1.0;
-        World_Progress_Bar.draw(monster.entity.world_position + v2{0, 1.95}, progress, options);
+        draw_entity_world_progress_bar(monster.entity, monster.entity.world_position + v2{0, 1.95}, progress, options);
         remaining := max(0, (monster.rented_until - get_time()).(s64));
-        spawn_text_world_scaled(monster.entity.world_position + v2{0, 2.25}, format_string("Monster %", {remaining}), {0.55, 1.0, 0.32, 1}, 0.95);
+        draw_entity_text_world_scaled(player.camera, monster.entity, v2{0, 2.25}, format_string("Monster %", {remaining}), {0.55, 1.0, 0.32, 1}, 0.95);
     }
 }
 
@@ -4998,26 +5046,23 @@ draw_rebirth_confirm :: proc(player: Player) {
 
 draw_vendor_world_labels :: proc(player: Player) {
     for sawmill: component_iterator(Lumber_Sawmill) {
-        pos := sawmill.entity.world_position;
-        spawn_text_world_scaled(pos + v2{0, 1.575}, "Refine", {0.95, 0.82, 0.36, 1}, 1.32);
+        draw_entity_text_world_scaled(player.camera, sawmill.entity, v2{0, 1.575}, "Refine", {0.95, 0.82, 0.36, 1}, 1.32);
     }
 
     for polisher: component_iterator(Polishing_Machine) {
-        pos := polisher.entity.world_position;
         if player_has_alien_refiner(player) {
-            spawn_text_world_scaled(pos + v2{0, 1.575}, "Polish", {0.78, 0.25, 1.0, 1}, 1.32);
+            draw_entity_text_world_scaled(player.camera, polisher.entity, v2{0, 1.575}, "Polish", {0.78, 0.25, 1.0, 1}, 1.32);
         } else {
-            spawn_text_world_scaled(pos + v2{0, 1.575}, "Requires rebirth 1", {1.0, 0.55, 0.25, 1}, 0.92);
+            draw_entity_text_world_scaled(player.camera, polisher.entity, v2{0, 1.575}, "Requires rebirth 1", {1.0, 0.55, 0.25, 1}, 0.92);
         }
     }
 
     for seller: component_iterator(Plank_Seller) {
-        pos := seller.entity.world_position;
-        spawn_text_world_scaled(pos + v2{0, 1.85}, "Sell", {1.0, 0.92, 0.25, 1}, 1.32);
+        draw_entity_text_world_scaled(player.camera, seller.entity, v2{0, 1.85}, "Sell", {1.0, 0.92, 0.25, 1}, 1.32);
     }
 
     for shop: component_iterator(Axe_Shop_NPC) {
-        spawn_text_world_scaled(shop.entity.world_position + v2{0, 1.85}, "Upgrade", {0.55, 1.0, 0.45, 1}, 1.52);
+        draw_entity_text_world_scaled(player.camera, shop.entity, v2{0, 1.85}, "Upgrade", {0.55, 1.0, 0.45, 1}, 1.52);
     }
 }
 
@@ -5040,10 +5085,10 @@ draw_sawmill_progress_bar :: proc(player: Player) {
         options.width = 1.65;
         options.height = 0.16;
         options.scale = 1.0;
-        World_Progress_Bar.draw(sawmill.entity.world_position + v2{0, 1.85}, progress, options);
+        draw_entity_world_progress_bar(sawmill.entity, sawmill.entity.world_position + v2{0, 1.85}, progress, options);
         if player.refining && player.refine_logs_total > 0 {
             processed := clamp(player.refine_logs_total - player.refine_logs_remaining, 0, player.refine_logs_total);
-            spawn_text_world_scaled(sawmill.entity.world_position + v2{0, 2.12}, format_string("%/%", {processed, player.refine_logs_total}), {0.95, 0.82, 0.36, 1}, 1.08);
+            draw_entity_text_world_scaled(player.camera, sawmill.entity, v2{0, 2.12}, format_string("%/%", {processed, player.refine_logs_total}), {0.95, 0.82, 0.36, 1}, 1.08);
         }
     }
 }
@@ -5059,10 +5104,10 @@ draw_polishing_progress_bar :: proc(player: Player) {
         options.width = 1.65;
         options.height = 0.16;
         options.scale = 1.0;
-        World_Progress_Bar.draw(polisher.entity.world_position + v2{0, 1.85}, progress, options);
+        draw_entity_world_progress_bar(polisher.entity, polisher.entity.world_position + v2{0, 1.85}, progress, options);
         if player.polish_planks_total > 0 {
             processed := clamp(player.polish_planks_total - player.polish_planks_remaining, 0, player.polish_planks_total);
-            spawn_text_world_scaled(polisher.entity.world_position + v2{0, 2.12}, format_string("%/%", {processed, player.polish_planks_total}), {0.42, 1.0, 0.88, 1}, 1.08);
+            draw_entity_text_world_scaled(player.camera, polisher.entity, v2{0, 2.12}, format_string("%/%", {processed, player.polish_planks_total}), {0.42, 1.0, 0.88, 1}, 1.08);
         }
     }
 }
@@ -5072,7 +5117,10 @@ spawn_text_world :: proc(pos: v2, text: string, color: v4) {
 }
 
 spawn_text_world_scaled :: proc(pos: v2, text: string, color: v4, scale: float) {
-    screen := world_to_screen(pos);
+    draw_text_world_scaled_at_screen_pos(world_to_screen(pos), text, color, scale);
+}
+
+draw_text_world_scaled_at_screen_pos :: proc(screen: v2, text: string, color: v4, scale: float) {
     rect := Rect{min=screen + v2{-130.0 * scale, -24.0 * scale}, max=screen + v2{130.0 * scale, 24.0 * scale}};
     ts := UI.default_text_settings();
     ts.size = 26.0 * scale;
@@ -5082,6 +5130,19 @@ spawn_text_world_scaled :: proc(pos: v2, text: string, color: v4, scale: float) 
     ts.halign = .CENTER;
     ts.valign = .CENTER;
     UI.text(rect, ts, text);
+}
+
+draw_text_world_scaled_interpolated :: proc(camera: Camera, pos: v2, prev_pos: v2, text: string, color: v4, scale: float) {
+    screen := world_to_screen(pos);
+    UI.push_interpolation_offset(world_screen_interpolation_offset(camera, pos, prev_pos));
+    draw_text_world_scaled_at_screen_pos(screen, text, color, scale);
+    UI.pop_interpolation_offset();
+}
+
+draw_entity_text_world_scaled :: proc(camera: Camera, anchor: Entity, offset: v2, text: string, color: v4, scale: float) {
+    if anchor == null || !#alive(anchor) return;
+    pos := anchor.world_position + offset;
+    draw_text_world_scaled_interpolated(camera, pos, entity_previous_world_pos(anchor, pos), text, color, scale);
 }
 
 draw_floating_feedback :: proc(f: Floating_Feedback, camera: Camera) {
@@ -5104,19 +5165,20 @@ draw_floating_feedback :: proc(f: Floating_Feedback, camera: Camera) {
     // between sim frames instead of stepping at 32hz.
     prev_t := min(1.0, f.prev_age / f.duration);
     prev_pos := f.start_pos + v2{f.drift_x * prev_t, prev_t * 1.2 + sin(prev_t * PI) * 0.4};
-    camera_delta := camera.position - camera.position_last_frame;
-    UI.push_interpolation_offset(screen - world_to_screen(prev_pos + camera_delta));
+    UI.push_interpolation_offset(world_screen_interpolation_offset(camera, pos, prev_pos));
     UI.text(rect, ts, f.text);
     UI.pop_interpolation_offset();
 }
 
-draw_world_ui_quad :: proc(pos: v2, texture: Texture_Asset, size: float, rotation: float, color: v4) {
+draw_world_ui_quad :: proc(camera: Camera, pos: v2, prev_pos: v2, texture: Texture_Asset, size: float, rotation: float, color: v4) {
     screen := world_to_screen(pos);
     half := v2{size * 0.5, size * 0.5};
     rect := Rect{min=screen - half, max=screen + half};
+    UI.push_interpolation_offset(world_screen_interpolation_offset(camera, pos, prev_pos));
     UI.push_matrix(Matrix4.rotate_about_point(rect.center(), rotation));
     UI.quad(rect, texture, color);
     UI.pop_matrix();
+    UI.pop_interpolation_offset();
 }
 
 draw_world_space_feedback :: proc(camera: Camera) {
@@ -5130,7 +5192,7 @@ draw_world_space_feedback :: proc(camera: Camera) {
             if !should_draw_feedback_owner(c.owner) continue;
             t := min(1.0, c.age / c.duration);
             alpha := 1.0 - max(0.0, (t - 0.62) / 0.38);
-            draw_world_ui_quad(c.pos, wood_chips_texture, 120.0 * c.scale, c.rotation, {1, 1, 1, alpha});
+            draw_world_ui_quad(camera, c.pos, c.prev_pos, wood_chips_texture, 120.0 * c.scale, c.rotation, {1, 1, 1, alpha});
         }
     }
 
@@ -5141,7 +5203,7 @@ draw_world_space_feedback :: proc(camera: Camera) {
             t := min(1.0, j.age / j.duration);
             shrink := max(0.05, 1.0 - t * 0.55);
             color := v4{j.start_color.x, j.start_color.y, j.start_color.z, j.start_color.w * (1.0 - t)};
-            draw_world_ui_quad(j.pos, wood_chips_texture, 120.0 * j.scale * shrink, j.rotation, color);
+            draw_world_ui_quad(camera, j.pos, j.prev_pos, wood_chips_texture, 120.0 * j.scale * shrink, j.rotation, color);
         }
     }
 
@@ -5155,7 +5217,10 @@ draw_world_space_feedback :: proc(camera: Camera) {
                 t = min(1.0, (p.age - p.delay) / p.duration);
             }
             pop := 1.0 + sin(t * PI) * 0.35;
-            draw_world_ui_quad(log_pickup_lerp_position(p), wood_logs_texture, 86.0 * p.base_scale * pop, 0, {1, 1, 1, 1});
+            pos := log_pickup_lerp_position(p);
+            owner_prev_pos := p.owner.entity.world_position - p.owner.entity.calculate_interpolation_offset();
+            prev_pos := log_pickup_lerp_position_at_age(p, p.prev_age, owner_prev_pos);
+            draw_world_ui_quad(camera, pos, prev_pos, wood_logs_texture, 86.0 * p.base_scale * pop, 0, {1, 1, 1, 1});
         }
     }
 

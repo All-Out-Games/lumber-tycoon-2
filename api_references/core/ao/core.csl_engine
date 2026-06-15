@@ -1,4 +1,5 @@
 import "core:basic"
+import "core:global_leaderboard"
 
 Entity :: class {
     set_local_enabled          :: method(enabled: bool)                                                                                                                 #foreign "entity_set_local_enabled";
@@ -194,14 +195,11 @@ Interactable :: class : Component {
     set_text      :: method(text: string) #foreign "interactable_set_text";
     get_hold_text :: method() -> string   #foreign "interactable_get_hold_text";
     set_hold_text :: method(text: string) #foreign "interactable_set_hold_text";
-    set_listener :: method(new_listener: Component) #unsafe {
+    set_listener :: method(new_listener: $T/Component) #unsafe {
         listener = new_listener;
-        true_type := type_info_table[new_listener.#type.(int)];
-        assert(true_type.kind == .CLASS, "% wasn't a class", {new_listener.#type});
-        struct_type := true_type.(Type_Info_Class).reference_to.(Type_Info_Struct);
-        can_use_proc = try_get_constant_procedure(struct_type, "can_use", proc(t: Component, player: Player) -> bool);
-        on_interact_proc = try_get_constant_procedure(struct_type, "on_interact", proc(t: Component, player: Player));
-        on_holding_proc = try_get_constant_procedure(struct_type, "on_holding", proc(t: Component, player: Player));
+        can_use_proc     = #optional_procedure_of_call(new_listener.can_use(null));
+        on_interact_proc = #optional_procedure_of_call(new_listener.on_interact(null));
+        on_holding_proc  = #optional_procedure_of_call(new_listener.on_holding(null));
     }
     offset:             v2        #foreign;
     prompt_offset:      v2        #foreign;
@@ -212,6 +210,7 @@ Interactable :: class : Component {
     can_use_proc:     (proc(t: Component, player: Player) -> bool) #foreign "csl_can_use_proc"     #read_only("use set_listener()");
     on_interact_proc: (proc(t: Component, player: Player))         #foreign "csl_on_interact_proc" #read_only("use set_listener()");
     on_holding_proc:  (proc(t: Component, player: Player))         #foreign "csl_on_holding_proc"  #read_only("use set_listener()");
+    #interface can_use     :: proc(t: Interactable, player: Player) -> bool;
     #interface on_interact :: proc(t: Interactable, player: Player);
     #interface on_holding  :: proc(t: Interactable, player: Player);
 } #foreign_struct "Interactable"
@@ -918,19 +917,31 @@ core_can_use_interactable :: proc(interactable: Interactable, player: Player) ->
 
 core_on_interactable_used :: proc(interactable: Interactable, player: Player) {
     if interactable.on_interact_proc != null {
+        UI.push_interpolation_anchor(interactable.listener.entity);
+        defer UI.pop_interpolation_anchor();
         interactable.on_interact_proc(interactable.listener, player);
     }
     #if #exists(Player.ao_on_interactable_used) {
-        Player.ao_on_interactable_used(player, interactable);
+        {
+            UI.push_interpolation_anchor(player.entity);
+            defer UI.pop_interpolation_anchor();
+            Player.ao_on_interactable_used(player, interactable);
+        }
     }
 }
 
 core_on_holding_interactable :: proc(interactable: Interactable, player: Player) {
     if interactable.on_holding_proc != null {
+        UI.push_interpolation_anchor(interactable.listener.entity);
+        defer UI.pop_interpolation_anchor();
         interactable.on_holding_proc(interactable.listener, player);
     }
     #if #exists(Player.ao_on_holding_interactable) {
-        Player.ao_on_holding_interactable(player, interactable);
+        {
+            UI.push_interpolation_anchor(player.entity);
+            defer UI.pop_interpolation_anchor();
+            Player.ao_on_holding_interactable(player, interactable);
+        }
     }
 }
 
@@ -958,6 +969,12 @@ core_player_update :: proc(player: Player, dt: float) {
 core_player_late_update :: proc(player: Player, dt: float) {
     if player.entity.effect_data != null && player.entity.effect_data.first_effect != null {
         core_late_update_effects(player.entity, dt);
+    }
+
+    if player.is_local_or_server() {
+        for leaderboard: component_iterator(Global_Leaderboard) {
+            leaderboard.draw();
+        }
     }
 }
 
@@ -1115,6 +1132,9 @@ UI :: struct {
     push_screen_draw_context :: proc() #foreign "ui_push_screen_draw_context";
     pop_draw_context         :: proc() #foreign "ui_pop_draw_context";
 
+    push_interpolation_anchor :: proc(entity: Entity) #foreign "ui_push_interpolation_anchor";
+    pop_interpolation_anchor  :: proc() #foreign "ui_pop_interpolation_anchor";
+
     push_interpolation_offset :: proc(offset: v2) #foreign "ui_push_interpolation_offset";
     pop_interpolation_offset  :: proc() #foreign "ui_pop_interpolation_offset";
 
@@ -1130,10 +1150,19 @@ UI :: struct {
     pop_matrix :: proc() #foreign "ui_pop_matrix";
 
     begin_world_space_ui :: proc(entity: Entity) {
-        push_interpolation_offset(entity.calculate_interpolation_offset());
+        push_world_draw_context();
+        if entity != null {
+            push_interpolation_offset(entity.calculate_interpolation_offset());
+        }
+        else {
+            push_interpolation_offset(v2{});
+        }
     }
 
-    end_world_space_ui :: pop_interpolation_offset;
+    end_world_space_ui :: proc() {
+        pop_interpolation_offset();
+        pop_draw_context();
+    }
 
     get_current_camera_size :: proc() -> float #foreign "ui_get_current_camera_size";
 
@@ -2224,7 +2253,7 @@ Effect_Base :: class {
             internal.end_proc(this, interrupt);
         }
 
-        #free_root(this);
+        #unrootify_object(this);
     }
 } #gc_root
 

@@ -1,0 +1,327 @@
+import "core:ao"
+
+Global_Leaderboard :: class : Component {
+    Entry :: struct {
+        user_id: string;
+        username: string;
+        score: f64;
+        placement: s64;
+    }
+
+    leaderboard_id: string @ao_serialize;
+    optional_title: string @ao_serialize;
+
+    bg_first:  Texture_Asset @ao_serialize;
+    bg_second: Texture_Asset @ao_serialize;
+    bg_third:  Texture_Asset @ao_serialize;
+    bg_other:  Texture_Asset @ao_serialize;
+    bg_me:     Texture_Asset @ao_serialize;
+
+    board_texture:  Texture_Asset;
+    shadow_texture: Texture_Asset;
+
+    entries: [..]Entry;
+    my_entry: Entry;
+    has_my_entry: bool;
+
+    last_refresh_time: float;
+    REFRESH_INTERVAL :: 5.0;
+
+    base_ts: Text_Settings;
+
+    init_texture :: method() {
+        board_texture  = get_asset(Texture_Asset, "$AO/leaderboard/leaderboard.png");
+        shadow_texture = get_asset(Texture_Asset, "$AO/leaderboard/shadow.png");
+
+        if bg_first  == null { bg_first  = get_asset(Texture_Asset, "$AO/leaderboard/RANK 1.png"); }
+        if bg_second == null { bg_second = get_asset(Texture_Asset, "$AO/leaderboard/RANK 2.png"); }
+        if bg_third  == null { bg_third  = get_asset(Texture_Asset, "$AO/leaderboard/RANK 3.png"); }
+        if bg_other  == null { bg_other  = get_asset(Texture_Asset, "$AO/leaderboard/RANK 4.png"); }
+        if bg_me     == null { bg_me     = get_asset(Texture_Asset, "$AO/leaderboard/RANK ME.png"); }
+    }
+
+    ao_start :: method() {
+        init_texture();
+
+        base_ts = UI.default_text_settings();
+        base_ts.size  = 0.15;
+        base_ts.color = v4.{1, 1, 1, 1};
+        base_ts.halign = .CENTER;
+        base_ts.valign = .CENTER;
+        base_ts.do_outline = true;
+        base_ts.outline_thickness = 3;
+        base_ts.outline_color = v4.{0, 0, 0, 1};
+
+        this.refresh_entries();
+        last_refresh_time = get_time();
+    }
+
+    ao_editor_start :: method() {
+        init_texture();
+    }
+
+    // Data refresh only — drawing is done from Player.ao_late_update
+    // so the scroll view has the current camera and player interaction context.
+    ao_late_update :: method(dt: float) {
+        now := get_time();
+        if now - last_refresh_time > REFRESH_INTERVAL {
+            last_refresh_time = now;
+            this.refresh_entries();
+        }
+    }
+
+    ao_editor_update :: method(dt: float) {
+        UI.push_entity_id(entity);
+        defer UI.pop_entity_id();
+        this.draw();
+    }
+
+    refresh_entries :: method() {
+        Save.ordered_get_all(leaderboard_id, 0, 50, this, on_entries_received);
+        if local_player, ok := Game.get_local_player(); ok {
+            user_id := local_player.get_user_id();
+            Save.ordered_get(leaderboard_id, user_id, 0, this, on_my_entry_received);
+        }
+    }
+
+    draw :: method() {
+        UI.push_world_draw_context();
+        defer UI.pop_draw_context();
+
+        UI.push_interpolation_anchor(entity);
+        defer UI.pop_interpolation_anchor();
+
+        pos := entity.world_position;
+
+        UI.push_z(pos.y);
+        defer UI.pop_z();
+
+        UI.push_id("lb_%", {entity.id});
+        defer UI.pop_id();
+
+        viewport_rect := Rect.{pos, pos}.grow(0.5, 1.4, 1.68, 1.4);
+
+        if board_texture != null {
+            board_rect := Rect.{pos, pos}.grow(2.4, 2.6, 2.6, 2.6);
+            board_rect = board_rect.fit_aspect(board_texture.get_aspect());
+
+            if shadow_texture != null {
+                shadow_rect := board_rect.grow(-0.4).fit_aspect(shadow_texture.get_aspect()).offset(0, -1.8);
+                UI.push_layer_relative(-1);
+                UI.quad(shadow_rect, shadow_texture);
+                UI.pop_layer();
+            }
+
+            UI.quad(board_rect, board_texture);
+        }
+        if !Game.is_editor() {
+            my_rect := viewport_rect.cut_bottom(0.3);
+            if has_my_entry {
+                this.draw_my_entry(my_rect);
+            }
+
+            settings: Scroll_View_Settings;
+            settings.vertical   = true;
+            settings.horizontal = false;
+            settings.clip_padding = v4.{0, 0.1, 0, 0};
+
+            sv := UI.push_scroll_view(viewport_rect, "world_leaderboard", settings); {
+                defer UI.pop_scroll_view();
+
+                content_cut := sv.content_rect.top_rect();
+
+                for i: 0..49 {
+                    h := 0.23;
+                    if i == 0 { h = 0.55; }
+                    if i == 1 { h = 0.375; }
+                    if i == 2 { h = 0.375; }
+
+                    entry_rect := content_cut.cut_top(h);
+                    if i == 0 { entry_rect = entry_rect.grow(0, 0.075, 0, 0); }
+
+                    this.draw_entry(entry_rect, i);
+                    UI.expand_current_scroll_view(entry_rect);
+                    content_cut.cut_top(0.05);
+                }
+            }
+
+            if optional_title.count > 0 {
+                title_pos := pos + v2.{0, -2.0};
+                title_rect := Rect.{title_pos, title_pos};
+
+                title_ts := base_ts;
+                title_ts.size       = 0.5;
+                title_ts.word_wrap  = false;
+
+                UI.text(title_rect, title_ts, optional_title);
+            }
+        }
+    }
+
+    draw_entry :: method(entry_rect: Rect, i: int) {
+        display_name := "TBD";
+        score: f64 = 0;
+
+        if i < entries.count {
+            display_name = entries[i].username;
+            if display_name.count == 0 { display_name = "Unknown"; }
+            score = entries[i].score;
+        }
+
+        tex := bg_other;
+        if i == 0 { tex = bg_first; }
+        if i == 1 { tex = bg_second; }
+        if i == 2 { tex = bg_third; }
+
+        if tex != null {
+            UI.quad(entry_rect, tex);
+        }
+
+        UI.push_layer_relative(1); {
+            defer UI.pop_layer();
+
+            text_size := 0.15;
+            if i < 3 { text_size = 0.215; }
+
+            rank_text_size := text_size * 1.5;
+
+            rank_color := v4.{41.0 / 255.0, 35.0 / 255.0, 39.0 / 255.0, 1.0};
+            if i == 0 { rank_color = v4.{184.0 / 255.0, 105.0 / 255.0, 0.0, 1.0}; }
+            if i == 1 { rank_color = v4.{63.0 / 255.0, 67.0 / 255.0, 79.0 / 255.0, 1.0}; }
+            if i == 2 { rank_color = v4.{126.0 / 255.0, 37.0 / 255.0, 16.0 / 255.0, 1.0}; }
+
+            ts := base_ts;
+            ts.size    = rank_text_size;
+            ts.color   = rank_color;
+            ts.halign  = .LEFT;
+            ts.do_outline = false;
+
+            rank_rect := entry_rect.left_rect().offset(0.2, 0);
+            if i == 0 { rank_rect = rank_rect.offset(0, -0.03); }
+
+            final_rank_rect := UI.text_sync(rank_rect, ts, "%", {i + 1});
+
+            suffix_ts := ts;
+            suffix_ts.size   = rank_text_size * 0.5;
+            suffix_ts.valign = .TOP;
+            suffix_rect := final_rank_rect.right_rect().offset(0, -0.02);
+            UI.text(suffix_rect, suffix_ts, ordinal_suffix(i));
+
+            name_ts := base_ts;
+            name_ts.size   = text_size;
+            name_ts.halign = .LEFT;
+            name_rect := entry_rect.left_rect().offset(1, 0);
+            if i == 0 { name_rect = name_rect.offset(0, -0.03); }
+            UI.text(name_rect, name_ts, display_name);
+
+            score_ts := base_ts;
+            score_ts.size   = text_size;
+            score_ts.halign = .RIGHT;
+            score_rect := entry_rect.right_rect().offset(-0.175, 0);
+            if i == 0 { score_rect = score_rect.offset(-0.075, -0.03); }
+            UI.text(score_rect, score_ts, "%", {score.(int)});
+        }
+    }
+
+    draw_my_entry :: method(my_rect: Rect) {
+        if bg_me != null {
+            UI.quad(my_rect, bg_me);
+        }
+
+        text_size      := 0.15;
+        rank_text_size := text_size * 1.5;
+        rank_color     := v4.{41.0 / 255.0, 35.0 / 255.0, 39.0 / 255.0, 1.0};
+
+        ts := base_ts;
+        ts.size       = rank_text_size;
+        ts.color      = rank_color;
+        ts.halign     = .LEFT;
+        ts.do_outline = false;
+
+        rank_rect := my_rect.left_rect().offset(0.2, 0);
+        placement := my_entry.placement + 1;
+        final_rank_rect := UI.text_sync(rank_rect, ts, "%", {placement});
+
+        suffix_ts := ts;
+        suffix_ts.size   = rank_text_size * 0.5;
+        suffix_ts.valign = .TOP;
+        suffix_rect := final_rank_rect.right_rect().offset(0, -0.02);
+        UI.text(suffix_rect, suffix_ts, ordinal_suffix(my_entry.placement.(int)));
+
+        name_ts := base_ts;
+        name_ts.size   = text_size;
+        name_ts.halign = .LEFT;
+        name_rect := my_rect.left_rect().offset(1, 0);
+        display_name := my_entry.username;
+        if display_name.count == 0 { display_name = "Me"; }
+        UI.text(name_rect, name_ts, display_name);
+
+        score_ts := base_ts;
+        score_ts.size   = text_size;
+        score_ts.halign = .RIGHT;
+        score_rect := my_rect.right_rect().offset(-0.175, 0);
+        UI.text(score_rect, score_ts, "%", {my_entry.score.(int)});
+    }
+
+    on_entries_received :: proc(raw_entries: []Ordered_Save_Entry, userdata: Object) {
+        lb := userdata.(Global_Leaderboard);
+        lb.entries.clear();
+        for raw: raw_entries {
+            e: Entry;
+            e.user_id   = raw.key;
+            e.score     = raw.value;
+            e.placement = raw.position;
+            e.username  = Game.lookup_player_name(raw.key);
+            lb.entries.append(e);
+        }
+    }
+
+    on_my_entry_received :: proc(raw: Ordered_Save_Entry, userdata: Object) {
+        lb := userdata.(Global_Leaderboard);
+        if raw.value > 0 {
+            lb.my_entry.user_id   = raw.key;
+            lb.my_entry.score     = raw.value;
+            lb.my_entry.placement = raw.position;
+            local_p, ok2 := Game.get_local_player();
+            if ok2 {
+                lb.my_entry.username = local_p.get_username();
+            } else {
+                lb.my_entry.username = "Me";
+            }
+            lb.has_my_entry = true;
+        } else {
+            lb.has_my_entry = false;
+        }
+    }
+
+    Increment_Data :: class {
+        user_id: string;
+        leaderboard_id: string;
+        amount: f64;
+    }
+
+    increment_score :: proc(player: Player, leaderboard_id: string, amount: f64) {
+        if !Game.is_server() return;
+        data := new(Increment_Data);
+        data.leaderboard_id = leaderboard_id;
+        data.user_id = player.get_user_id();
+        data.amount = amount;
+        #rootify_object(data);
+        Save.ordered_get(leaderboard_id, data.user_id, 0.0, data, proc(entry: Ordered_Save_Entry, userdata: Object) {
+            d := userdata.(Increment_Data);
+            new_score := entry.value + d.amount;
+            Save.ordered_set(d.leaderboard_id, d.user_id, new_score);
+            #free_root(d);
+        });
+    }
+
+    ordinal_suffix :: proc(index: int) -> string {
+        mod100 := index % 100;
+        if mod100 >= 10 && mod100 <= 12 return "th";
+        mod10 := index % 10;
+        if mod10 == 0 return "st";
+        if mod10 == 1 return "nd";
+        if mod10 == 2 return "rd";
+        return "th";
+    }
+}
