@@ -541,6 +541,29 @@ Texture_Nine_Slice_Data :: struct {
     slice_scale: float #foreign;
 } #foreign_struct "Texture_Nine_Slice_Data"
 
+Fill_Direction :: enum {
+    NONE;
+    RIGHT;
+    LEFT;
+    UP;
+    DOWN;
+}
+
+Float_Interpolation :: struct {
+    previous: float #foreign;
+    current:  float #foreign;
+} #foreign_struct "Float_Interpolation"
+
+Quad_Fill_Params :: struct {
+    amount:    Float_Interpolation #foreign;
+    direction: Fill_Direction      #foreign;
+} #foreign_struct "Quad_Fill_Params"
+
+Quad_Params :: struct {
+    nine_slice: Texture_Nine_Slice_Data #foreign;
+    fill:       Quad_Fill_Params        #foreign;
+} #foreign_struct "Quad_Params"
+
 Button_Settings :: struct {
     color:                       v4                      #foreign;
     hovered_color:               v4                      #foreign;
@@ -825,7 +848,7 @@ core_before_scene_load :: proc() {
 
     core_globals.white_sprite               = get_asset(Texture_Asset, "$AO/white.png");
     core_globals.tutorial_arrow             = get_asset(Texture_Asset, "$AO/big_arrow.png");
-    core_globals.button_green               = get_asset(Texture_Asset, "$AO/ui/kit/Modals/basic_buttons/button_large_green1.png");
+    core_globals.button_green               = get_asset(Texture_Asset, "$AO/ui/kit/Game UI/Buttons/basic_buttons/button_large_green1.png");
     core_globals.ability_bg                 = get_asset(Texture_Asset, "$AO/new/Ability Buttons/v2/small_ability_button.png");
     core_globals.ability_pressed_bg         = get_asset(Texture_Asset, "$AO/new/Ability Buttons/v2/small_ability_button_pressed.png");
     core_globals.ability_bg_big             = get_asset(Texture_Asset, "$AO/new/Ability Buttons/v2/big_ability_button.png");
@@ -1138,6 +1161,17 @@ UI :: struct {
     push_interpolation_offset :: proc(offset: v2) #foreign "ui_push_interpolation_offset";
     pop_interpolation_offset  :: proc() #foreign "ui_pop_interpolation_offset";
 
+    push_fill_amount :: proc(amount: Float_Interpolation, direction: Fill_Direction = .RIGHT) #foreign "ui_push_fill_amount";
+    pop_fill_amount  :: proc() #foreign "ui_pop_fill_amount";
+
+    quad_fill :: proc(amount: float, direction: Fill_Direction = .RIGHT) -> Quad_Fill_Params {
+        return Quad_Fill_Params.{amount=Float_Interpolation.{amount, amount}, direction=direction};
+    }
+
+    quad_fill :: proc(amount: Float_Interpolation, direction: Fill_Direction = .RIGHT) -> Quad_Fill_Params {
+        return Quad_Fill_Params.{amount=amount, direction=direction};
+    }
+
     push_layer :: proc(layer: s64) #foreign "ui_push_layer";
     pop_layer :: proc() #foreign "ui_pop_layer";
 
@@ -1172,7 +1206,7 @@ UI :: struct {
     wire_box :: proc(lo: v2, hi: v2, thickness: float, color: v4 = {0, 1, 0, 1}) #foreign "ui_wire_box";
     wire_circle :: proc(center: v2, radius: float, thickness: float, color: v4 = {0, 1, 0, 1}, resolution := 32) #foreign "ui_wire_circle";
     line :: proc(start: v2, end: v2, thickness: float, texture: Texture_Asset, color: v4 = {1, 1, 1, 1}, repeat_texture := false) #foreign "ui_line";
-    quad :: proc(rect: Rect, texture: Texture_Asset, color: v4 = {1, 1, 1, 1}) #foreign "ui_quad";
+    quad :: proc(rect: Rect, texture: Texture_Asset, color: v4 = {1, 1, 1, 1}, params: Quad_Params = {}) #foreign "ui_quad";
     text :: proc(rect: Rect, settings: Text_Settings, str: string, args: [^]any = {}) #foreign "ui_text";
     text_sync :: proc(rect: Rect, settings: Text_Settings, str: string, args: [^]any = {}) -> Rect #foreign "ui_text_sync";
     measure_text :: proc(rect: Rect, settings: Text_Settings, str: string, args: [^]any = {}) -> Rect #foreign "ui_measure_text";
@@ -1596,7 +1630,7 @@ Input :: enum {
     MOUSE_MIDDLE;
 }
 
-Render_Interpolation_Helper :: struct {
+Position_Interpolation_Helper :: struct {
     last_frame_rendered: u64;
     last_position: v2;
 
@@ -1609,6 +1643,22 @@ Render_Interpolation_Helper :: struct {
         last_frame_rendered = current_frame;
         last_position = position;
         return offset;
+    }
+}
+
+Float_Interpolation_Helper :: struct {
+    last_frame_rendered: u64;
+    last_value: float;
+
+    update :: method(value: float) -> Float_Interpolation {
+        current_frame := get_frame_number();
+        result := Float_Interpolation.{value, value};
+        if last_frame_rendered == (current_frame - 1) {
+            result.previous = last_value;
+        }
+        last_frame_rendered = current_frame;
+        last_value = value;
+        return result;
     }
 }
 

@@ -1,5 +1,6 @@
 {
   "csl": true,
+  "manual_mip_divisor": 16,
   "projects": [
     {
       "name": "Lumber Tycoon Adventure",
